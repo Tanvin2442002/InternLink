@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:interlink/pages/main_nav_page.dart';
 
 void main() {
   runApp(const InternshipApp());
@@ -12,7 +13,8 @@ class InternshipApp extends StatelessWidget {
     return MaterialApp(
       title: 'Internship AI Match',
       debugShowCheckedModeBanner: false,
-      home: const InternshipPage(),
+     // home: const InternshipPage(),
+      home: const MainNavigationPage(),
     );
   }
 }
