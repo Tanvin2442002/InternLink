@@ -14,16 +14,40 @@ class MainNavigationPage extends StatefulWidget {
 
 class _MainNavigationPageState extends State<MainNavigationPage> {
   int _currentIndex = 0;
+  bool isCvUploaded = false;
 
-  final List<Widget> _pages = const [
-    DashboardPage(),
-    InternshipListPage(),
-    ApplicationTrackerPage(),
-    ProfilePage(),
-  ];
+  late final List<Widget> _pages;
+
+  @override
+  void initState() {
+    super.initState();
+    _pages = [
+      const DashboardPage(),
+      const InternshipListPage(),
+      const ApplicationTrackerPage(),
+      ProfilePage(
+        onCvUploaded: () {
+          // You can update state here if you want later
+          setState(() {
+            isCvUploaded = true;
+          });
+        },
+      ),
+    ];
+  }
 
   void _onNavTap(int index) {
-    if (_currentIndex == index) return; // prevent rebuild if same tab tapped
+    // Temporarily disable CV restriction
+    // if (!isCvUploaded && index != 3) {
+    //   ScaffoldMessenger.of(context).showSnackBar(
+    //     const SnackBar(
+    //       content: Text("Please upload your CV to continue"),
+    //     ),
+    //   );
+    //   return;
+    // }
+
+    if (_currentIndex == index) return;
     setState(() {
       _currentIndex = index;
     });
