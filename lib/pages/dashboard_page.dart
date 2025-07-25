@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'login_page.dart';
 
 class DashboardPage extends StatelessWidget {
-  final Function(int)? onSwitchTab; // Add this parameter
+  final Function(int)? onSwitchTab;
   
   const DashboardPage({
     super.key,
@@ -34,7 +34,7 @@ class DashboardPage extends StatelessWidget {
                         ),
                       ),
                       const Text(
-                        'John Doe',
+                        'Pallab',
                         style: TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
@@ -47,12 +47,10 @@ class DashboardPage extends StatelessWidget {
                   PopupMenuButton<String>(
                     onSelected: (value) {
                       if (value == 'profile') {
-                        // Switch to profile tab (index 3)
                         if (onSwitchTab != null) {
                           onSwitchTab!(3);
                         }
                       } else if (value == 'logout') {
-                        // Navigate to login page
                         Navigator.pushReplacement(
                           context,
                           MaterialPageRoute(
@@ -95,7 +93,7 @@ class DashboardPage extends StatelessWidget {
                         ),
                       ),
                     ],
-                    offset: const Offset(0, 60), // Position dropdown below avatar
+                    offset: const Offset(0, 60),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -138,6 +136,19 @@ class DashboardPage extends StatelessWidget {
               ),
               const SizedBox(height: 24),
 
+              // Activity Status Chart Section
+              Text(
+                'Application Activity',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 12),
+              _buildActivityChart(),
+              const SizedBox(height: 24),
+
               // Quick Actions
               Text(
                 'Quick Actions',
@@ -153,7 +164,6 @@ class DashboardPage extends StatelessWidget {
                   Expanded(
                     child: GestureDetector(
                       onTap: () {
-                        // Switch to internships tab (index 1)
                         if (onSwitchTab != null) {
                           onSwitchTab!(1);
                         }
@@ -169,7 +179,6 @@ class DashboardPage extends StatelessWidget {
                   Expanded(
                     child: GestureDetector(
                       onTap: () {
-                        // Switch to tracker tab (index 2)
                         if (onSwitchTab != null) {
                           onSwitchTab!(2);
                         }
@@ -213,7 +222,6 @@ class DashboardPage extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               
-              // Saved Internships List
               _buildSavedInternshipsList(),
               
               const SizedBox(height: 24),
@@ -233,6 +241,123 @@ class DashboardPage extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildActivityChart() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            spreadRadius: 0,
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Last 7 Days',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.trending_up, size: 16, color: Colors.green),
+                    SizedBox(width: 4),
+                    Text(
+                      '+23%',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.green,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          
+          // Chart Area
+          Container(
+            height: 200,
+            child: CustomPaint(
+              size: Size.infinite,
+              painter: LineChartPainter(),
+            ),
+          ),
+          
+          const SizedBox(height: 20),
+          
+          // Chart Legend
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildLegendItem('Applications', Colors.blue, '12'),
+              _buildLegendItem('Responses', Colors.green, '5'),
+              _buildLegendItem('Interviews', Colors.orange, '3'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLegendItem(String label, Color color, String value) {
+    return Column(
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 12,
+              height: 12,
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
+              ),
+            ),
+          ],
+        ),
+        SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+        ),
+      ],
     );
   }
 
@@ -639,4 +764,102 @@ class DashboardPage extends StatelessWidget {
       }).toList(),
     );
   }
+}
+
+class LineChartPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..strokeWidth = 3
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    // Sample data points for the chart
+    final applicationData = [2, 1, 3, 2, 4, 1, 2]; // Applications per day
+    final responseData = [0, 1, 1, 0, 2, 0, 1];    // Responses per day
+    final interviewData = [0, 0, 1, 0, 1, 0, 1];   // Interviews per day
+
+    final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    
+    // Draw grid lines
+    final gridPaint = Paint()
+      ..color = Colors.grey.withOpacity(0.2)
+      ..strokeWidth = 1;
+
+    // Horizontal grid lines
+    for (int i = 0; i <= 5; i++) {
+      final y = size.height - (i * size.height / 5);
+      canvas.drawLine(
+        Offset(0, y),
+        Offset(size.width, y),
+        gridPaint,
+      );
+    }
+
+    // Vertical grid lines
+    for (int i = 0; i < 7; i++) {
+      final x = i * size.width / 6;
+      canvas.drawLine(
+        Offset(x, 0),
+        Offset(x, size.height),
+        gridPaint,
+      );
+    }
+
+    // Draw lines
+    _drawLine(canvas, size, applicationData, Colors.blue, paint);
+    _drawLine(canvas, size, responseData, Colors.green, paint);
+    _drawLine(canvas, size, interviewData, Colors.orange, paint);
+
+    // Draw day labels
+    final textPainter = TextPainter(
+      textDirection: TextDirection.ltr,
+    );
+
+    for (int i = 0; i < days.length; i++) {
+      textPainter.text = TextSpan(
+        text: days[i],
+        style: TextStyle(
+          color: Colors.grey[600],
+          fontSize: 10,
+        ),
+      );
+      textPainter.layout();
+      
+      final x = i * size.width / 6 - textPainter.width / 2;
+      textPainter.paint(canvas, Offset(x, size.height + 10));
+    }
+  }
+
+  void _drawLine(Canvas canvas, Size size, List<int> data, Color color, Paint paint) {
+    paint.color = color;
+    
+    final path = Path();
+    final maxValue = 5; // Max value for scaling
+    
+    for (int i = 0; i < data.length; i++) {
+      final x = i * size.width / (data.length - 1);
+      final y = size.height - (data[i] / maxValue * size.height);
+      
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+      
+      // Draw points
+      canvas.drawCircle(
+        Offset(x, y),
+        4,
+        Paint()
+          ..color = color
+          ..style = PaintingStyle.fill,
+      );
+    }
+    
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(CustomPainter oldDelegate) => false;
 }
