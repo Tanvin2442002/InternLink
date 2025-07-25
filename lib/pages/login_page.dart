@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'dashboard_page.dart';
+import 'main_nav_page.dart'; // Changed import
 
 class LoginPage extends StatelessWidget {
   const LoginPage({super.key});
@@ -121,10 +121,10 @@ class LoginPage extends StatelessWidget {
                 ),
                 child: ElevatedButton(
                   onPressed: () {
-                    Navigator.push(
+                    Navigator.pushReplacement( // Use pushReplacement to prevent going back
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const DashboardPage(),
+                        builder: (context) => const MainNavigationPage(), // Navigate to main nav
                       ),
                     );
                   },

@@ -22,12 +22,11 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
   void initState() {
     super.initState();
     _pages = [
-      const DashboardPage(),
+      DashboardPage(onSwitchTab: _onNavTap), // Pass the callback
       const InternshipListPage(),
       const ApplicationTrackerPage(),
       ProfilePage(
         onCvUploaded: () {
-          // You can update state here if you want later
           setState(() {
             isCvUploaded = true;
           });
@@ -37,16 +36,6 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
   }
 
   void _onNavTap(int index) {
-    // Temporarily disable CV restriction
-    // if (!isCvUploaded && index != 3) {
-    //   ScaffoldMessenger.of(context).showSnackBar(
-    //     const SnackBar(
-    //       content: Text("Please upload your CV to continue"),
-    //     ),
-    //   );
-    //   return;
-    // }
-
     if (_currentIndex == index) return;
     setState(() {
       _currentIndex = index;

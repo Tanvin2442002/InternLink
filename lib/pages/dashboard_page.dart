@@ -1,329 +1,633 @@
 import 'package:flutter/material.dart';
+import 'login_page.dart';
+
 class DashboardPage extends StatelessWidget {
-  const DashboardPage({super.key});
+  final Function(int)? onSwitchTab; // Add this parameter
+  
+  const DashboardPage({
+    super.key,
+    this.onSwitchTab,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FB),
+      backgroundColor: Colors.grey[50],
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: ListView(
-            padding: const EdgeInsets.only(bottom: 40),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 20),
-
-              // Greeting
-              Text(
-                "Hi, Pallab 👋",
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                "Ready to explore?",
-                style: TextStyle(color: Colors.grey[600]),
-              ),
-              const SizedBox(height: 32),
-
-              // Profile Completion Card
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      "Profile Completion",
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      "Complete your profile to get better matches",
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        ElevatedButton(
-                          onPressed: () {},
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF3663F2),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
-                          child: const Text("Complete your profile"),
+              // Header Section
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Good Morning!',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.grey[600],
                         ),
-                        Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            SizedBox(
-                              height: 40,
-                              width: 40,
-                              child: CircularProgressIndicator(
-                                value: 0.75,
-                                strokeWidth: 5,
-                                backgroundColor: Colors.grey[300],
-                                valueColor: const AlwaysStoppedAnimation<Color>(
-                                  Color(0xFF3663F2),
-                                ),
-                              ),
-                            ),
-                            const Text("75%"),
+                      ),
+                      const Text(
+                        'John Doe',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ],
+                  ),
+                  // Profile Dropdown Menu
+                  PopupMenuButton<String>(
+                    onSelected: (value) {
+                      if (value == 'profile') {
+                        // Switch to profile tab (index 3)
+                        if (onSwitchTab != null) {
+                          onSwitchTab!(3);
+                        }
+                      } else if (value == 'logout') {
+                        // Navigate to login page
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const LoginPage(),
+                          ),
+                        );
+                      }
+                    },
+                    child: CircleAvatar(
+                      radius: 25,
+                      backgroundColor: Colors.deepPurple[100],
+                      child: Icon(
+                        Icons.person,
+                        color: Colors.deepPurple,
+                        size: 30,
+                      ),
+                    ),
+                    itemBuilder: (BuildContext context) => [
+                      PopupMenuItem<String>(
+                        value: 'profile',
+                        child: Row(
+                          children: const [
+                            Icon(Icons.person, size: 20, color: Colors.grey),
+                            SizedBox(width: 12),
+                            Text('Profile'),
                           ],
                         ),
-                      ],
+                      ),
+                      PopupMenuItem<String>(
+                        value: 'logout',
+                        child: Row(
+                          children: const [
+                            Icon(Icons.logout, size: 20, color: Colors.red),
+                            SizedBox(width: 12),
+                            Text(
+                              'Logout',
+                              style: TextStyle(color: Colors.red),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    offset: const Offset(0, 60), // Position dropdown below avatar
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 32),
-
-              // Stats Grid
-              GridView.count(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                crossAxisCount: 2,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-                childAspectRatio: 2.4,
-                children: const [
-                  _StatCard(
-                    icon: Icons.search,
-                    count: "24",
-                    label: "Internships Matched",
-                    iconColor: Colors.purple,
-                  ),
-                  _StatCard(
-                    icon: Icons.description,
-                    count: "8",
-                    label: "Applications Sent",
-                    iconColor: Colors.orange,
-                  ),
-                  _StatCard(
-                    icon: Icons.calendar_today,
-                    count: "3",
-                    label: "Interviews Scheduled",
-                    iconColor: Colors.green,
-                  ),
-                  _StatCard(
-                    icon: Icons.visibility,
-                    count: "12",
-                    label: "Profile Views",
-                    iconColor: Colors.pink,
+                    elevation: 8,
                   ),
                 ],
               ),
+              const SizedBox(height: 24),
 
-              const SizedBox(height: 32),
+              // Stats Cards
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildStatCard(
+                      'Applications',
+                      '12',
+                      Icons.send,
+                      Colors.blue,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildStatCard(
+                      'Interviews',
+                      '3',
+                      Icons.calendar_today,
+                      Colors.green,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildStatCard(
+                      'Saved',
+                      '8',
+                      Icons.bookmark,
+                      Colors.orange,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
 
-              // Recommended for You
-              const Text(
-                "Recommended for You",
+              // Quick Actions
+              Text(
+                'Quick Actions',
                 style: TextStyle(
+                  fontSize: 20,
                   fontWeight: FontWeight.bold,
-                  fontSize: 16,
+                  color: Colors.black87,
                 ),
               ),
-              const SizedBox(height: 16),
-
-              // Scrollable Job Cards
-              SizedBox(
-                height: 160,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  children: const [
-                    _JobCard(
-                      company: "Google",
-                      title: "UX Design Intern",
-                      logo: Icons.g_mobiledata,
-                      iconColor: Colors.redAccent,
-                    ),
-                    SizedBox(width: 12),
-                    _JobCard(
-                      company: "Microsoft",
-                      title: "Product Intern",
-                      logo: Icons.apps,
-                      iconColor: Colors.blue,
-                    ),
-                    SizedBox(width: 12),
-                    _JobCard(
-                      company: "Spotify",
-                      title: "Frontend Intern",
-                      logo: Icons.music_note,
-                      iconColor: Colors.green,
-                    ),
-                    SizedBox(width: 12),
-                    _JobCard(
-                      company: "Meta",
-                      title: "Design Intern",
-                      logo: Icons.facebook,
-                      iconColor: Colors.indigo,
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 32),
-
-              // Add Skills Tip
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEAF2FF),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.lightbulb, color: Colors.blue),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text("Add more skills to improve your match score!"),
-                          TextButton(
-                            onPressed: () {},
-                            child: const Text('Update Skills'),
-                          ),
-                        ],
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        // Switch to internships tab (index 1)
+                        if (onSwitchTab != null) {
+                          onSwitchTab!(1);
+                        }
+                      },
+                      child: _buildActionCard(
+                        'Browse Jobs',
+                        Icons.search,
+                        Colors.deepPurple,
                       ),
                     ),
-                  ],
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        // Switch to tracker tab (index 2)
+                        if (onSwitchTab != null) {
+                          onSwitchTab!(2);
+                        }
+                      },
+                      child: _buildActionCard(
+                        'Track Applications',
+                        Icons.track_changes,
+                        Colors.green,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+
+              // Saved Internships Section
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Saved Internships',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      // Navigate to full saved list
+                    },
+                    child: Text(
+                      'View All',
+                      style: TextStyle(
+                        color: Colors.deepPurple,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              
+              // Saved Internships List
+              _buildSavedInternshipsList(),
+              
+              const SizedBox(height: 24),
+
+              // Recent Activity
+              Text(
+                'Recent Activity',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
                 ),
               ),
+              const SizedBox(height: 12),
+              _buildRecentActivity(),
             ],
           ),
         ),
       ),
     );
   }
-}
 
-// ========== Components ==========
-
-class _StatCard extends StatelessWidget {
-  final IconData icon;
-  final String count;
-  final String label;
-  final Color iconColor;
-
-  const _StatCard({
-    required this.icon,
-    required this.count,
-    required this.label,
-    required this.iconColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildStatCard(String title, String value, IconData icon, Color color) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            spreadRadius: 0,
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: iconColor),
-          const SizedBox(width: 12),
-          Expanded( // Add Expanded here to prevent overflow
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  count,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-                Text(
-                  label,
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
-                  overflow: TextOverflow.ellipsis, // Add this to handle long text
-                  maxLines: 1, // Limit to one line
-                ),
-              ],
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: color, size: 20),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[600],
             ),
           ),
         ],
       ),
     );
   }
-}
 
-class _JobCard extends StatelessWidget {
-  final String title;
-  final String company;
-  final IconData logo;
-  final Color iconColor;
-
-  const _JobCard({
-    required this.title,
-    required this.company,
-    required this.logo,
-    required this.iconColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildActionCard(String title, IconData icon, Color color) {
     return Container(
-      width: 220,
-      padding: const EdgeInsets.all(12),
+      height: 100, // Add fixed height
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [color, color.withOpacity(0.8)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.3),
+            spreadRadius: 0,
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center, // Center content vertically
+        children: [
+          Icon(icon, color: Colors.white, size: 24),
+          const SizedBox(height: 8), // Reduced spacing
+          Flexible( // Make text flexible to prevent overflow
+            child: Text(
+              title,
+              style: const TextStyle(
+                fontSize: 14, // Slightly smaller font
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
+              maxLines: 2, // Allow text to wrap to 2 lines if needed
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSavedInternshipsList() {
+    final savedInternships = [
+      {
+        'title': 'Software Engineering Intern',
+        'company': 'Google',
+        'location': 'Mountain View, CA',
+        'type': 'Full-time',
+        'logo': Icons.computer,  // Changed to valid icon
+        'color': Colors.blue,
+        'salary': '\$8,000/month',
+        'savedDate': '2 days ago',
+      },
+      {
+        'title': 'Data Science Intern',
+        'company': 'Microsoft',
+        'location': 'Seattle, WA',
+        'type': 'Full-time',
+        'logo': Icons.analytics,  // Changed to valid icon
+        'color': Colors.green,
+        'salary': '\$7,500/month',
+        'savedDate': '1 week ago',
+      },
+      {
+        'title': 'UX Design Intern',
+        'company': 'Apple',
+        'location': 'Cupertino, CA',
+        'type': 'Part-time',
+        'logo': Icons.design_services,  // Changed to valid icon
+        'color': Colors.grey[800]!,
+        'salary': '\$6,000/month',
+        'savedDate': '3 days ago',
+      },
+    ];
+
+    return Column(
+      children: savedInternships.map((internship) {
+        return Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          child: _buildSavedInternshipCard(internship),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildSavedInternshipCard(Map<String, dynamic> internship) {
+    return Container(
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-      ),
-      child: Stack(
-        children: [
-          // View label in top-right
-          Positioned(
-            top: 0,
-            right: 0,
-            child: Text(
-              "View",
-              style: TextStyle(
-                color: Colors.blue[600],
-                fontWeight: FontWeight.w500,
-              ),
-            ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            spreadRadius: 0,
+            blurRadius: 10,
+            offset: const Offset(0, 2),
           ),
-
-          // Logo and info
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Icon(logo, size: 32, color: iconColor),
+              // Company Logo
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: (internship['color'] as Color).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  internship['logo'] as IconData,
+                  color: internship['color'] as Color,
+                  size: 24,
+                ),
+              ),
               const SizedBox(width: 12),
+              
+              // Job Info
               Expanded(
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      title,
+                      internship['title'] as String,
                       style: const TextStyle(
-                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      internship['company'] as String,
+                      style: TextStyle(
                         fontSize: 14,
+                        color: Colors.grey[600],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              
+              // Bookmark Icon
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.bookmark,
+                  color: Colors.orange,
+                  size: 20,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          
+          // Location and Type
+          Row(
+            children: [
+              Icon(
+                Icons.location_on,
+                size: 16,
+                color: Colors.grey[600],
+              ),
+              const SizedBox(width: 4),
+              Text(
+                internship['location'] as String,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                ),
+              ),
+              const SizedBox(width: 16),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  internship['type'] as String,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: Colors.blue,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          
+          // Salary and Saved Date
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                internship['salary'] as String,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.green,
+                ),
+              ),
+              Text(
+                'Saved ${internship['savedDate']}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[500],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          
+          // Action Buttons
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () {
+                    // Remove from saved
+                  },
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: Colors.red.withOpacity(0.5)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: Text(
+                    'Remove',
+                    style: TextStyle(
+                      color: Colors.red,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () {
+                    // View details or apply
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.deepPurple,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text(
+                    'View Details',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRecentActivity() {
+    final activities = [
+      {
+        'title': 'Applied to Frontend Developer at Netflix',
+        'time': '2 hours ago',
+        'icon': Icons.send,
+        'color': Colors.blue,
+      },
+      {
+        'title': 'Saved Backend Engineer at Spotify',
+        'time': '1 day ago',
+        'icon': Icons.bookmark_add,
+        'color': Colors.orange,
+      },
+      {
+        'title': 'Interview scheduled with Amazon',
+        'time': '2 days ago',
+        'icon': Icons.calendar_today,
+        'color': Colors.green,
+      },
+    ];
+
+    return Column(
+      children: activities.map((activity) {
+        return Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.grey.withOpacity(0.1),
+                spreadRadius: 0,
+                blurRadius: 10,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: (activity['color'] as Color).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  activity['icon'] as IconData,
+                  color: activity['color'] as Color,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      activity['title'] as String,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.black87,
                       ),
                     ),
                     Text(
-                      company,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: Colors.grey,
+                      activity['time'] as String,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
                       ),
                     ),
                   ],
@@ -331,8 +635,8 @@ class _JobCard extends StatelessWidget {
               ),
             ],
           ),
-        ],
-      ),
+        );
+      }).toList(),
     );
   }
 }
