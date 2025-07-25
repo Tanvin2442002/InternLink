@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'application_form_page.dart';
 
 class InternshipDetailsPage extends StatelessWidget {
   const InternshipDetailsPage({super.key});
@@ -116,7 +117,17 @@ class InternshipDetailsPage extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  onPressed: () {},
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const ApplicationFormPage(
+                          internshipTitle: "Frontend Developer Intern",
+                          companyName: "TechVision Labs",
+                        ),
+                      ),
+                    );
+                  },
                   child: const Text("Apply Now"),
                 ),
               ),

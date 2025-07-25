@@ -152,13 +152,41 @@ class InternshipCard extends StatelessWidget {
             const SizedBox(height: 12),
             Row(
               children: [
-                const Icon(Icons.location_on_outlined, size: 18),
-                const SizedBox(width: 4),
-                Text(data['location']),
-                const SizedBox(width: 16),
-                const Icon(Icons.schedule_outlined, size: 18),
-                const SizedBox(width: 4),
-                Text(data['duration']),
+                Expanded( // Wrap the location info in Expanded
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min, // Add this
+                    children: [
+                      const Icon(Icons.location_on_outlined, size: 18),
+                      const SizedBox(width: 4),
+                      Flexible( // Use Flexible for text that might overflow
+                        child: Text(
+                          data['location'],
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                          style: const TextStyle(fontSize: 12), // Make text smaller
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8), // Reduce spacing
+                Expanded( // Wrap the duration info in Expanded
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min, // Add this
+                    children: [
+                      const Icon(Icons.schedule_outlined, size: 18),
+                      const SizedBox(width: 4),
+                      Flexible( // Use Flexible for text that might overflow
+                        child: Text(
+                          data['duration'],
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                          style: const TextStyle(fontSize: 12), // Make text smaller
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 8),

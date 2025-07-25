@@ -251,11 +251,15 @@ class ApplicationTrackerPage extends StatelessWidget {
                       const SizedBox(height: 8),
                       Row(
                         children: [
-                          const Icon(Icons.access_time, size: 16, color: Colors.grey),
+                          const Icon(Icons.access_time, size: 14, color: Colors.grey),
                           const SizedBox(width: 4),
-                          Text(
-                            "Applied on ${app.date}",
-                            style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                          Expanded(
+                            child: Text(
+                              "Applied on ${app.date}",
+                              style: TextStyle(color: Colors.grey[600], fontSize: 11),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
                           ),
                         ],
                       ),
