@@ -1,24 +1,7 @@
 import 'package:flutter/material.dart';
 
-void main() {
-  runApp(const MyApp());
-}
-
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Track and Connect',
-      home: const TrackConnectPage(),
-    );
-  }
-}
-
-class TrackConnectPage extends StatelessWidget {
-  const TrackConnectPage({super.key});
+class Boarding1Page extends StatelessWidget {
+  const Boarding1Page({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -39,6 +22,26 @@ class TrackConnectPage extends StatelessWidget {
         child: SafeArea(
           child: Column(
             children: [
+              // Skip button
+              Align(
+                alignment: Alignment.topRight,
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: TextButton(
+                    onPressed: () {
+                      Navigator.pushReplacementNamed(context, '/login');
+                    },
+                    child: const Text(
+                      'Skip',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              
               const SizedBox(height: 30),
 
               // Top icons (replacing images with icons)
@@ -110,43 +113,51 @@ class TrackConnectPage extends StatelessWidget {
 
               const SizedBox(height: 40),
 
-              // Page Indicators
+              // Page Indicators - boarding1 is active (2nd dot)
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  _buildDot(isActive: false),
+                  _buildDot(isActive: false),  // boarding0
                   const SizedBox(width: 8),
-                  _buildDot(isActive: false),
+                  _buildDot(isActive: true),   // boarding1 - ACTIVE
                   const SizedBox(width: 8),
-                  _buildDot(isActive: true),
+                  _buildDot(isActive: false),  // boarding3
+                  const SizedBox(width: 8),
+                  _buildDot(isActive: false),  // signup
                 ],
               ),
 
-              const SizedBox(height: 50),
+              const Spacer(),
 
-              // Get Started button
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 60, vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(30),
-                  ),
-                ),
-                onPressed: () {
-                  // Do something on button press
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Get Started pressed')),
-                  );
-                },
-                child: const Text(
-                  'Get Started',
-                  style: TextStyle(
-                    color: Color(0xFF5D5FEF),
-                    fontSize: 16,
+              // Next button
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 40.0),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                    ),
+                    onPressed: () {
+                      Navigator.pushReplacementNamed(context, '/boarding3'); // Go to boarding3 next
+                    },
+                    child: const Text(
+                      'Next',
+                      style: TextStyle(
+                        color: Color(0xFF5D5FEF),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ),
               ),
+
+              const SizedBox(height: 40),
             ],
           ),
         ),

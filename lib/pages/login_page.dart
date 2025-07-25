@@ -23,20 +23,22 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   void _handleLogin() {
-    // Navigate based on user type
+    // Navigate based on user type and clear navigation stack
     if (_selectedUserType == 'Recruiter') {
-      Navigator.pushReplacement(
+      Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
           builder: (context) => const RecruiterMainNavigationPage(),
         ),
+        (route) => false, // This removes all previous routes
       );
     } else {
-      Navigator.pushReplacement(
+      Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
           builder: (context) => const MainNavigationPage(),
         ),
+        (route) => false, // This removes all previous routes
       );
     }
   }
@@ -222,7 +224,9 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       const SizedBox(width: 32),
                       TextButton(
-                        onPressed: () {},
+                        onPressed: () {
+                          Navigator.pushReplacementNamed(context, '/boarding2'); // This goes to signup
+                        },
                         child: const Text(
                           'Sign Up',
                           style: TextStyle(color: Colors.grey, fontSize: 16),
@@ -246,7 +250,7 @@ class _LoginPageState extends State<LoginPage> {
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
                       ),
-                      contentPadding: const EdgeInsets.symmetric( // Added to reduce height
+                      contentPadding: const EdgeInsets.symmetric(// Added to reduce height
                         horizontal: 16,
                         vertical: 12,
                       ),
@@ -268,7 +272,7 @@ class _LoginPageState extends State<LoginPage> {
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
                       ),
-                      contentPadding: const EdgeInsets.symmetric( // Added to reduce height
+                      contentPadding: const EdgeInsets.symmetric(// Added to reduce height
                         horizontal: 16,
                         vertical: 12,
                       ),
@@ -361,12 +365,17 @@ class _LoginPageState extends State<LoginPage> {
 
                   // Bottom Sign up
                   Padding(
-                    padding: const EdgeInsets.only(bottom: 16), // Added bottom padding
+                    padding: const EdgeInsets.only(bottom: 16),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         const Text("Don't have an account? "),
-                        TextButton(onPressed: () {}, child: const Text('Sign up')),
+                        TextButton(
+                          onPressed: () {
+                            Navigator.pushReplacementNamed(context, '/boarding2'); // This goes to signup
+                          },
+                          child: const Text('Sign up'),
+                        ),
                       ],
                     ),
                   ),
