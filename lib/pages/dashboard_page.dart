@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'login_page.dart';
+import 'internship_details_page.dart';
 
 class DashboardPage extends StatelessWidget {
   final Function(int)? onSwitchTab;
@@ -208,7 +209,9 @@ class DashboardPage extends StatelessWidget {
                   ),
                   TextButton(
                     onPressed: () {
-                      // Navigate to full saved list
+                      if (onSwitchTab != null) {
+                        onSwitchTab!(1); // Navigate to internships tab
+                      }
                     },
                     child: Text(
                       'View All',
@@ -222,7 +225,7 @@ class DashboardPage extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               
-              _buildSavedInternshipsList(),
+              _buildSavedInternshipsList(context),
               
               const SizedBox(height: 24),
 
@@ -451,7 +454,7 @@ class DashboardPage extends StatelessWidget {
     );
   }
 
-  Widget _buildSavedInternshipsList() {
+  Widget _buildSavedInternshipsList(BuildContext context) {
     final savedInternships = [
       {
         'title': 'Software Engineering Intern',
@@ -489,13 +492,13 @@ class DashboardPage extends StatelessWidget {
       children: savedInternships.map((internship) {
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
-          child: _buildSavedInternshipCard(internship),
+          child: _buildSavedInternshipCard(context, internship),
         );
       }).toList(),
     );
   }
 
-  Widget _buildSavedInternshipCard(Map<String, dynamic> internship) {
+  Widget _buildSavedInternshipCard(BuildContext context, Map<String, dynamic> internship) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -639,7 +642,35 @@ class DashboardPage extends StatelessWidget {
               Expanded(
                 child: OutlinedButton(
                   onPressed: () {
-                    // Remove from saved
+                    showDialog(
+                      context: context,
+                      builder: (BuildContext context) {
+                        return AlertDialog(
+                          title: const Text('Remove Internship'),
+                          content: Text('Are you sure you want to remove "${internship['title']}" from your saved list?'),
+                          actions: [
+                            TextButton(
+                              onPressed: () {
+                                Navigator.of(context).pop();
+                              },
+                              child: const Text('Cancel'),
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                Navigator.of(context).pop();
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Removed "${internship['title']}" from saved list'),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                              },
+                              child: const Text('Remove', style: TextStyle(color: Colors.red)),
+                            ),
+                          ],
+                        );
+                      },
+                    );
                   },
                   style: OutlinedButton.styleFrom(
                     side: BorderSide(color: Colors.red.withOpacity(0.5)),
@@ -660,7 +691,12 @@ class DashboardPage extends StatelessWidget {
               Expanded(
                 child: ElevatedButton(
                   onPressed: () {
-                    // View details or apply
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const InternshipDetailsPage(),
+                      ),
+                    );
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.deepPurple,
