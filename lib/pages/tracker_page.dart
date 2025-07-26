@@ -724,20 +724,17 @@ class _ApplicationTrackerPageState extends State<ApplicationTrackerPage> {
 
                         const SizedBox(height: 16),
 
-                        // Quick info row - UPDATED
+                        // Quick info row
                         Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Expanded(
-                              // Wrap each item in Expanded
-                              flex: 2,
+                              flex: 3,
                               child: _buildQuickInfo(
                                 Icons.attach_money,
                                 app.salary,
                                 Colors.green,
                               ),
                             ),
-                            const SizedBox(width: 8), // Reduced spacing
                             Expanded(
                               flex: 2,
                               child: _buildQuickInfo(
@@ -746,9 +743,8 @@ class _ApplicationTrackerPageState extends State<ApplicationTrackerPage> {
                                 Colors.orange,
                               ),
                             ),
-                            const SizedBox(width: 8), // Reduced spacing
                             Expanded(
-                              flex: 1,
+                              flex: 2,
                               child: _buildQuickInfo(
                                 Icons.badge,
                                 app.applicationId,
@@ -778,22 +774,18 @@ class _ApplicationTrackerPageState extends State<ApplicationTrackerPage> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.end,
                           children: [
-                            Flexible(
-                              // Make text flexible
-                              child: Text(
-                                'Tap to view details',
-                                style: TextStyle(
-                                  color: const Color(0xFF667eea),
-                                  fontSize: 11, // Reduced font size
-                                  fontWeight: FontWeight.w500,
-                                ),
-                                overflow: TextOverflow.ellipsis,
+                            Text(
+                              'Tap to view details',
+                              style: TextStyle(
+                                color: const Color(0xFF667eea),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
                             const SizedBox(width: 4),
                             Icon(
                               Icons.arrow_forward_ios,
-                              size: 10, // Reduced icon size
+                              size: 10,
                               color: const Color(0xFF667eea),
                             ),
                           ],
@@ -814,28 +806,24 @@ class _ApplicationTrackerPageState extends State<ApplicationTrackerPage> {
   }
 
   Widget _buildQuickInfo(IconData icon, String text, Color color) {
-    return Flexible(
-      // Use Flexible instead of Row
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: color), // Reduced icon size
-          const SizedBox(width: 3), // Reduced spacing
-          Flexible(
-            // Make text flexible
-            child: Text(
-              text,
-              style: TextStyle(
-                color: Colors.grey[700],
-                fontSize: 11, // Reduced font size
-                fontWeight: FontWeight.w500,
-              ),
-              overflow: TextOverflow.ellipsis, // Handle overflow
-              maxLines: 1,
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: color),
+        const SizedBox(width: 3),
+        Flexible(
+          child: Text(
+            text,
+            style: TextStyle(
+              color: Colors.grey[700],
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
             ),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
