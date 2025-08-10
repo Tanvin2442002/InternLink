@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:interlink/widgets/recruiter_bottom_nav.dart';
 import 'recruiter_dashboard.dart';
 import 'recruiter_post_job_page.dart';
 import 'recruiter_candidates_page.dart';
@@ -38,13 +37,31 @@ class _RecruiterMainNavigationPageState extends State<RecruiterMainNavigationPag
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _pages,
-      ),
-      bottomNavigationBar: RecruiterBottomNavBar(
+      body: _pages[_currentIndex],
+      bottomNavigationBar: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed,
         currentIndex: _currentIndex,
         onTap: _onNavTap,
+        selectedItemColor: Colors.deepPurple,
+        unselectedItemColor: Colors.grey,
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.dashboard),
+            label: 'Dashboard',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.work),
+            label: 'Post Jobs',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.people),
+            label: 'Candidates',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person),
+            label: 'Profile',
+          ),
+        ],
       ),
     );
   }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'main_nav_page.dart';
 import 'recruiter_main_nav_page.dart';
+import '../services/api_service.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -14,6 +15,7 @@ class _LoginPageState extends State<LoginPage> {
   String _selectedUserType = 'Applicant'; // Default selection
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -22,25 +24,59 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
-  void _handleLogin() {
-    // Navigate based on user type and clear navigation stack
-    if (_selectedUserType == 'Recruiter') {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(
-          builder: (context) => const RecruiterMainNavigationPage(),
-        ),
-        (route) => false, // This removes all previous routes
-      );
-    } else {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(
-          builder: (context) => const MainNavigationPage(),
-        ),
-        (route) => false, // This removes all previous routes
-      );
+  void _handleLogin() async {
+    // Basic validation
+    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
+      _showSnackBar('Please fill in all fields', isError: true);
+      return;
     }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final result = await ApiService.login(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
+
+      print('🔍 Login result: $result');
+
+      if (result['success']) {
+        _showSnackBar('Login successful!');
+
+        // Navigate to main page based on user type
+        final userType = result['user']['user_type'];
+        print('🔍 User type: $userType');
+        
+        if (userType == 'recruiter') {
+          print('🔍 Navigating to recruiter main');
+          Navigator.pushReplacementNamed(context, '/recruiter_main');
+        } else {
+          print('🔍 Navigating to applicant main');
+          Navigator.pushReplacementNamed(context, '/main');
+        }
+      } else {
+        _showSnackBar(result['message'], isError: true);
+      }
+    } catch (e) {
+      _showSnackBar('An error occurred. Please try again.', isError: true);
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _showSnackBar(String message, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Colors.red : Colors.green,
+        duration: const Duration(seconds: 3),
+      ),
+    );
   }
 
   @override
@@ -294,7 +330,7 @@ class _LoginPageState extends State<LoginPage> {
                   // Gradient Login Button
                   Container(
                     width: double.infinity,
-                    height: 48, // Reduced from 50
+                    height: 48,
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
                         colors: [Color(0xFF6A5AE0), Color(0xFF8F41F4)],
@@ -302,7 +338,7 @@ class _LoginPageState extends State<LoginPage> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: ElevatedButton(
-                      onPressed: _handleLogin,
+                      onPressed: _isLoading ? null : _handleLogin, // Disable when loading
                       style: ElevatedButton.styleFrom(
                         elevation: 0,
                         backgroundColor: Colors.transparent,
@@ -311,10 +347,19 @@ class _LoginPageState extends State<LoginPage> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      child: Text(
-                        'Login as $_selectedUserType',
-                        style: const TextStyle(fontSize: 16, color: Colors.white),
-                      ),
+                      child: _isLoading
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : const Text(
+                              'Login',
+                              style: TextStyle(fontSize: 16, color: Colors.white),
+                            ),
                     ),
                   ),
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import '../services/api_service.dart';
 
 class Boarding2Page extends StatefulWidget {
   const Boarding2Page({super.key});
@@ -28,8 +29,9 @@ class _Boarding2PageState extends State<Boarding2Page> {
   final _universityController = TextEditingController();
   final _majorController = TextEditingController();
   final _phoneController = TextEditingController();
-  String _selectedYearOfStudy = 'Freshman';
-  String _selectedGraduationYear = '2024';
+
+  // Loading state
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -46,9 +48,92 @@ class _Boarding2PageState extends State<Boarding2Page> {
     super.dispose();
   }
 
-  void _handleSignUp() {
-    // Navigate to login page after successful signup
-    Navigator.pushReplacementNamed(context, '/login');
+  void _handleSignUp() async {
+    // Basic validation
+    if (_nameController.text.isEmpty || 
+        _emailController.text.isEmpty || 
+        _passwordController.text.isEmpty ||
+        _confirmPasswordController.text.isEmpty) {
+      _showSnackBar('Please fill in all required fields', isError: true);
+      return;
+    }
+
+    if (_passwordController.text != _confirmPasswordController.text) {
+      _showSnackBar('Passwords do not match', isError: true);
+      return;
+    }
+
+    if (_passwordController.text.length < 6) {
+      _showSnackBar('Password must be at least 6 characters long', isError: true);
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // Test connection first
+      print('🔍 Testing server connection...');
+      final connectionTest = await ApiService.testConnection();
+      if (!connectionTest) {
+        _showSnackBar('Unable to connect to server. Please check your internet connection.', isError: true);
+        return;
+      }
+      print('✅ Server connection successful');
+
+      // Prepare profile data based on user type
+      Map<String, dynamic> profileData;
+      
+      if (_selectedUserType == 'Applicant') {
+        profileData = {
+          'fullName': _nameController.text.trim(),
+          'universityName': _universityController.text.trim(),
+          'major': _majorController.text.trim(),
+          'phoneNumber': _phoneController.text.trim(),
+          'studentEmail': _emailController.text.trim(),
+        };
+      } else {
+        profileData = {
+          'fullName': _nameController.text.trim(),
+          'companyName': _companyNameController.text.trim(),
+          'positionTitle': _positionController.text.trim(),
+          'companyWebsite': _companyWebsiteController.text.trim(),
+          'workEmail': _emailController.text.trim(),
+        };
+      }
+
+      final result = await ApiService.signup(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+        userType: _selectedUserType,
+        profileData: profileData,
+      );
+
+      if (result['success']) {
+        _showSnackBar('Account created successfully!');
+        // Navigate to login page
+        Navigator.pushReplacementNamed(context, '/login');
+      } else {
+        _showSnackBar(result['message'], isError: true);
+      }
+    } catch (e) {
+      _showSnackBar('An error occurred. Please try again.', isError: true);
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _showSnackBar(String message, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Colors.red : Colors.green,
+        duration: const Duration(seconds: 3),
+      ),
+    );
   }
 
   Widget _buildDot({required bool isActive}) {
@@ -335,72 +420,6 @@ class _Boarding2PageState extends State<Boarding2Page> {
                     ),
                     const SizedBox(height: 12),
 
-                    // Year of Study and Graduation Year
-                    Column(
-                      children: [
-                        // Year of Study
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.grey[100],
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: DropdownButtonFormField<String>(
-                            value: _selectedYearOfStudy,
-                            decoration: const InputDecoration(
-                              border: InputBorder.none,
-                              prefixIcon: Icon(Icons.calendar_today_outlined),
-                              hintText: 'Year of Study',
-                              contentPadding: EdgeInsets.symmetric(vertical: 12),
-                            ),
-                            isExpanded: true,
-                            items: ['Freshman', 'Sophomore', 'Junior', 'Senior', 'Graduate']
-                                .map((year) => DropdownMenuItem(
-                                      value: year,
-                                      child: Text(year),
-                                    ))
-                                .toList(),
-                            onChanged: (value) {
-                              setState(() {
-                                _selectedYearOfStudy = value!;
-                              });
-                            },
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        // Graduation Year
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.grey[100],
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: DropdownButtonFormField<String>(
-                            value: _selectedGraduationYear,
-                            decoration: const InputDecoration(
-                              border: InputBorder.none,
-                              prefixIcon: Icon(Icons.event_outlined),
-                              hintText: 'Expected Graduation Year',
-                              contentPadding: EdgeInsets.symmetric(vertical: 12),
-                            ),
-                            isExpanded: true,
-                            items: List.generate(6, (index) => (2024 + index).toString())
-                                .map((year) => DropdownMenuItem(
-                                      value: year,
-                                      child: Text(year),
-                                    ))
-                                .toList(),
-                            onChanged: (value) {
-                              setState(() {
-                                _selectedGraduationYear = value!;
-                              });
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-
                     // Phone Number
                     TextField(
                       controller: _phoneController,
@@ -635,7 +654,7 @@ class _Boarding2PageState extends State<Boarding2Page> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: ElevatedButton(
-                      onPressed: _handleSignUp,
+                      onPressed: _isLoading ? null : _handleSignUp, // Disable when loading
                       style: ElevatedButton.styleFrom(
                         elevation: 0,
                         backgroundColor: Colors.transparent,
@@ -644,10 +663,19 @@ class _Boarding2PageState extends State<Boarding2Page> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      child: Text(
-                        'Sign Up as $_selectedUserType',
-                        style: const TextStyle(fontSize: 16, color: Colors.white),
-                      ),
+                      child: _isLoading
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : Text(
+                              'Sign Up as $_selectedUserType',
+                              style: const TextStyle(fontSize: 16, color: Colors.white),
+                            ),
                     ),
                   ),
 

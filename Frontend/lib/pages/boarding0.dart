@@ -114,63 +114,83 @@ class Boarding0Page extends StatelessWidget {
                     ),
                     child: Column(
                       children: [
-                        _buildFeatureRow(Icons.smart_toy, "AI-Powered Matching"),
-                        const SizedBox(height: 10),
-                        _buildFeatureRow(Icons.trending_up, "Career Growth"),
-                        const SizedBox(height: 10),
-                        _buildFeatureRow(Icons.verified, "Verified Companies"),
+                        _buildFeatureRow(Icons.search, 'Smart Job Matching'),
+                        const SizedBox(height: 12),
+                        _buildFeatureRow(Icons.analytics, 'AI-Powered Insights'),
+                        const SizedBox(height: 12),
+                        _buildFeatureRow(Icons.trending_up, 'Career Growth'),
                       ],
                     ),
                   ),
 
-                  const SizedBox(height: 30),
+                  const SizedBox(height: 40),
 
-                  // Page Indicators - UPDATED to show 4 dots for the flow
+                  // Page Indicators
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      _buildDot(isActive: true),  // boarding0 (current)
+                      _buildDot(isActive: true),
                       const SizedBox(width: 8),
-                      _buildDot(isActive: false), // boarding1
+                      _buildDot(isActive: false),
                       const SizedBox(width: 8),
-                      _buildDot(isActive: false), // boarding3
+                      _buildDot(isActive: false),
                       const SizedBox(width: 8),
-                      _buildDot(isActive: false), // signup
+                      _buildDot(isActive: false),
                     ],
                   ),
 
-                  const SizedBox(height: 30),
+                  const SizedBox(height: 40),
 
-                  // Next Button
-                  SizedBox(
+                  // Get Started Button
+                  Container(
                     width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.pushReplacementNamed(context, '/boarding1'); // Use pushReplacementNamed
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: const Color(0xFF6A5AE0),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        elevation: 8,
-                        shadowColor: Colors.black.withOpacity(0.3),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
+                    height: 56,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Colors.white, Color(0xFFF8F9FF)],
                       ),
-                      child: const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () {
+                          Navigator.pushReplacementNamed(context, '/boarding1');
+                        },
+                        borderRadius: BorderRadius.circular(16),
+                        child: const Center(
+                          child: Text(
                             'Get Started',
                             style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF6A5AE0),
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
-                          SizedBox(width: 8),
-                          Icon(Icons.arrow_forward, size: 18),
-                        ],
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // Skip Button
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pushReplacementNamed(context, '/login');
+                    },
+                    child: const Text(
+                      'Skip',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 16,
                       ),
                     ),
                   ),
@@ -188,11 +208,7 @@ class Boarding0Page extends StatelessWidget {
   Widget _buildFeatureRow(IconData icon, String text) {
     return Row(
       children: [
-        Icon(
-          icon,
-          color: Colors.white,
-          size: 18,
-        ),
+        Icon(icon, color: Colors.white, size: 20),
         const SizedBox(width: 12),
         Text(
           text,
@@ -207,22 +223,12 @@ class Boarding0Page extends StatelessWidget {
   }
 
   Widget _buildDot({required bool isActive}) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      width: isActive ? 12 : 8,
-      height: isActive ? 12 : 8,
+    return Container(
+      width: isActive ? 10 : 8,
+      height: isActive ? 10 : 8,
       decoration: BoxDecoration(
-        color: isActive ? Colors.white : Colors.white38,
+        color: isActive ? Colors.white : Colors.white54,
         shape: BoxShape.circle,
-        boxShadow: isActive
-            ? [
-                BoxShadow(
-                  color: Colors.white.withOpacity(0.3),
-                  blurRadius: 4,
-                  spreadRadius: 1,
-                ),
-              ]
-            : null,
       ),
     );
   }
