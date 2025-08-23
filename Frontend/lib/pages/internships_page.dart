@@ -1,172 +1,223 @@
+import 'dart:convert'; // for jsonDecode
 import 'package:flutter/material.dart';
+import '../services/api_service.dart';
 import 'internship_details_page.dart';
 
-class InternshipListPage extends StatelessWidget {
+class InternshipListPage extends StatefulWidget {
   const InternshipListPage({super.key});
 
-  final internships = const [
-    {
-      'company': 'TechCorp',
-      'role': 'Frontend Development Intern',
-      'location': 'San Francisco, CA',
-      'duration': '3 months',
-      'stipend': '\$3,000/month',
-      'skills': ['React', 'TypeScript', 'Figma'],
-      'image': 'https://logo.clearbit.com/techcrunch.com',
-    },
-    {
-      'company': 'DesignHub',
-      'role': 'UI/UX Design Intern',
-      'location': 'Remote',
-      'duration': '6 months',
-      'stipend': '\$2,500/month',
-      'skills': ['Figma', 'Adobe XD', 'Prototyping'],
-      'image': 'https://logo.clearbit.com/dribbble.com',
-    },
-    {
-      'company': 'DataTech',
-      'role': 'Data Science Intern',
-      'location': 'New York, NY',
-      'duration': '4 months',
-      'stipend': '\$3,500/month',
-      'skills': ['Python', 'Machine Learning', 'SQL'],
-      'image': 'https://logo.clearbit.com/github.com',
-    },
-    {
-      'company': 'CloudSys',
-      'role': 'Cloud Engineering Intern',
-      'location': 'Seattle, WA',
-      'duration': '3 months',
-      'stipend': '\$4,000/month',
-      'skills': ['AWS', 'Docker', 'Kubernetes'],
-      'image': 'https://logo.clearbit.com/docker.com',
-    },
-    {
-      'company': 'MobileDev',
-      'role': 'Mobile Development Intern',
-      'location': 'Austin, TX',
-      'duration': '6 months',
-      'stipend': '\$3,200/month',
-      'skills': ['React Native', 'iOS', 'Android'],
-      'image': 'https://logo.clearbit.com/apple.com',
-    },
-  ];
+  @override
+  State<InternshipListPage> createState() => _InternshipListPageState();
+}
+
+class _InternshipListPageState extends State<InternshipListPage> {
+  List<Map<String, dynamic>> _internships = [];
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchJobs();
+  }
+
+  Future<void> _fetchJobs() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    final result = await ApiService.getAllJobs();
+    if (!mounted) return;
+
+    if (result['success'] == true) {
+      final jobs = (result['jobs'] as List)
+          .map<Map<String, dynamic>>((j) => _normalizeJob(j as Map<String, dynamic>))
+          .toList();
+      setState(() {
+        _internships = jobs;
+        _loading = false;
+      });
+    } else {
+      setState(() {
+        _error = result['message']?.toString() ?? 'Failed to fetch jobs';
+        _loading = false;
+      });
+    }
+  }
+
+  Map<String, dynamic> _normalizeJob(Map<String, dynamic> j) {
+    // Normalize backend fields to the UI keys used by the card
+    final skillsRaw = j['required_skills'];
+    List<String> skills;
+    if (skillsRaw is List) {
+      skills = skillsRaw.map((e) => e.toString()).toList();
+    } else if (skillsRaw is String) {
+      // try JSON array, else comma-separated
+      try {
+        final parsed = (jsonDecode(skillsRaw) as List).map((e) => e.toString()).toList();
+        skills = parsed;
+      } catch (_) {
+        skills = skillsRaw.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+      }
+    } else {
+      skills = [];
+    }
+
+    String duration = '';
+    if (j['duration_months'] != null) {
+      final d = j['duration_months'];
+      duration = d is num ? '${d.toInt()} months' : d.toString();
+    }
+
+    String stipend = '';
+    if (j['stipend'] != null) {
+      final s = j['stipend'];
+      stipend = s is num ? '\$${s.toStringAsFixed(0)}/month' : s.toString();
+    }
+
+    return {
+      // UI fields for card
+      'company_name': j['company_name'] ?? j['company'] ?? 'Unknown Company',
+      'title': j['title'] ?? j['position_title'] ?? 'Internship',
+      'location': j['location'] ?? (j['employment_type'] ?? 'Remote'),
+      'duration_months': duration.isNotEmpty ? duration : (j['duration']?.toString() ?? 'N/A'),
+      'stipend': stipend.isNotEmpty ? stipend : (j['salary']?.toString() ?? 'N/A'),
+      'required_skills': skills,
+      'company_logo_url': j['company_logo_url'] ?? j['logo_url'] ?? '',
+      // keep identifiers and the raw backend job so details page gets everything
+      'id': j['id'],
+      '_raw': j,
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: CustomScrollView(
-        slivers: [
-          SliverAppBar(
-            expandedHeight: 200,
-            floating: false,
-            pinned: true,
-            backgroundColor: Colors.transparent,
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Color(0xFF667eea),
-                      Color(0xFF764ba2),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? RefreshIndicator(
+                  onRefresh: _fetchJobs,
+                  child: ListView(
+                    children: [
+                      const SizedBox(height: 120),
+                      Icon(Icons.work_outline, size: 56, color: Colors.grey[500]),
+                      const SizedBox(height: 12),
+                      Center(
+                        child: Text(
+                          _error!,
+                          style: TextStyle(color: Colors.grey[700]),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Center(
+                        child: TextButton(
+                          onPressed: _fetchJobs,
+                          child: const Text('Retry'),
+                        ),
+                      ),
                     ],
                   ),
-                ),
-                child: SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Spacer(),
-                        const Text(
-                          'Discover Internships',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
+                )
+              : CustomScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  slivers: [
+                    SliverAppBar(
+                      expandedHeight: 200,
+                      floating: false,
+                      pinned: true,
+                      backgroundColor: Colors.transparent,
+                      flexibleSpace: FlexibleSpaceBar(
+                        background: Container(
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [Color(0xFF667eea), Color(0xFF764ba2)],
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          '${internships.length} opportunities available',
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 16,
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        // Search bar
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.9),
-                            borderRadius: BorderRadius.circular(25),
-                          ),
-                          child: TextField(
-                            decoration: const InputDecoration(
-                              hintText: 'Search internships...',
-                              prefixIcon: Icon(Icons.search, color: Colors.grey),
-                              suffixIcon: Icon(Icons.filter_list, color: Colors.grey),
-                              border: InputBorder.none,
-                              contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                          child: SafeArea(
+                            child: Padding(
+                              padding: const EdgeInsets.all(20),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Spacer(),
+                                  const Text(
+                                    'Discover Internships',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 28,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    '${_internships.length} opportunities available',
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 20),
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.9),
+                                      borderRadius: BorderRadius.circular(25),
+                                    ),
+                                    child: const TextField(
+                                      decoration: InputDecoration(
+                                        hintText: 'Search internships...',
+                                        prefixIcon: Icon(Icons.search, color: Colors.grey),
+                                        suffixIcon: Icon(Icons.filter_list, color: Colors.grey),
+                                        border: InputBorder.none,
+                                        contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
-                      ],
+                      ),
                     ),
-                  ),
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: const [
+                            Text(
+                              'Featured Opportunities',
+                              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                            ),
+                            SizedBox(height: 16),
+                          ],
+                        ),
+                      ),
+                    ),
+                    SliverPadding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      sliver: SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) {
+                            return InternshipCard(data: _internships[index]);
+                          },
+                          childCount: _internships.length,
+                        ),
+                      ),
+                    ),
+                    const SliverToBoxAdapter(child: SizedBox(height: 100)),
+                  ],
                 ),
-              ),
-            ),
-          ),
-          
-          // Featured section
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Featured Opportunities',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-              ),
-            ),
-          ),
-          
-          // Internships list
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            sliver: SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  return InternshipCard(data: internships[index]);
-                },
-                childCount: internships.length,
-              ),
-            ),
-          ),
-          
-          // Bottom padding
-          const SliverToBoxAdapter(
-            child: SizedBox(height: 100),
-          ),
-        ],
-      ),
     );
   }
 }
 
 class InternshipCard extends StatelessWidget {
-  final Map data;
+  final Map<String, dynamic> data; // normalized + _raw
   const InternshipCard({super.key, required this.data});
 
   @override
@@ -189,10 +240,12 @@ class InternshipCard extends StatelessWidget {
         child: InkWell(
           borderRadius: BorderRadius.circular(20),
           onTap: () {
+            final Map<String, dynamic> job =
+                (data['_raw'] is Map<String, dynamic>) ? data['_raw'] as Map<String, dynamic> : data;
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => const InternshipDetailsPage(),
+                builder: (_) => InternshipDetailsPage(job: job), // pass full raw job (with id)
               ),
             );
           },
@@ -201,11 +254,10 @@ class InternshipCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header with company info and NEW badge
                 Row(
                   children: [
                     Hero(
-                      tag: 'company_${data['company']}',
+                      tag: 'company_${data['company_name']}_${data['title']}',
                       child: Container(
                         width: 56,
                         height: 56,
@@ -221,19 +273,27 @@ class InternshipCard extends StatelessWidget {
                         ),
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(16),
-                          child: Image.network(
-                            data['image'],
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return Container(
-                                decoration: BoxDecoration(
-                                  color: Colors.grey[300],
-                                  borderRadius: BorderRadius.circular(16),
+                          child: (data['company_logo_url'] as String).isNotEmpty
+                              ? Image.network(
+                                  data['company_logo_url'],
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Container(
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey[300],
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      child: const Icon(Icons.business, color: Colors.grey, size: 30),
+                                    );
+                                  },
+                                )
+                              : Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey[300],
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  child: const Icon(Icons.business, color: Colors.grey, size: 30),
                                 ),
-                                child: const Icon(Icons.business, color: Colors.grey, size: 30),
-                              );
-                            },
-                          ),
                         ),
                       ),
                     ),
@@ -243,19 +303,13 @@ class InternshipCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            data['company'],
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 18,
-                            ),
+                            data['company_name'],
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            data['role'],
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: Colors.grey[600],
-                            ),
+                            data['title'],
+                            style: TextStyle(fontSize: 16, color: Colors.grey[600]),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -263,31 +317,19 @@ class InternshipCard extends StatelessWidget {
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF667eea), Color(0xFF764ba2)],
-                        ),
+                        gradient: const LinearGradient(colors: [Color(0xFF667eea), Color(0xFF764ba2)]),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: const Text(
                         "NEW",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 12,
-                        ),
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12),
                       ),
                     ),
                   ],
                 ),
-                
                 const SizedBox(height: 20),
-                
-                // Location and Duration
                 Row(
                   children: [
                     Expanded(
@@ -301,58 +343,41 @@ class InternshipCard extends StatelessWidget {
                     Expanded(
                       child: _buildInfoChip(
                         icon: Icons.schedule_outlined,
-                        text: data['duration'],
+                        text: data['duration_months'],
                         color: Colors.orange,
                       ),
                     ),
                   ],
                 ),
-                
                 const SizedBox(height: 16),
-                
-                // Skills
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
-                  children: data['skills']
-                      .map<Widget>((skill) => Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.grey[100],
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: Colors.grey[300]!),
-                            ),
-                            child: Text(
-                              skill,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey[700],
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ))
+                  children: (data['required_skills'] as List)
+                      .map<Widget>(
+                        (skill) => Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[100],
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: Colors.grey[300]!),
+                          ),
+                          child: Text(
+                            skill.toString(),
+                            style: TextStyle(fontSize: 12, color: Colors.grey[700], fontWeight: FontWeight.w500),
+                          ),
+                        ),
+                      )
                       .toList(),
                 ),
-                
                 const SizedBox(height: 20),
-                
-                // Stipend and Apply Button
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Stipend',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[600],
-                          ),
-                        ),
+                        Text('Stipend', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
                         const SizedBox(height: 4),
                         Text(
                           data['stipend'],
@@ -366,9 +391,7 @@ class InternshipCard extends StatelessWidget {
                     ),
                     Container(
                       decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF667eea), Color(0xFF764ba2)],
-                        ),
+                        gradient: const LinearGradient(colors: [Color(0xFF667eea), Color(0xFF764ba2)]),
                         borderRadius: BorderRadius.circular(25),
                         boxShadow: [
                           BoxShadow(
@@ -382,38 +405,25 @@ class InternshipCard extends StatelessWidget {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.transparent,
                           shadowColor: Colors.transparent,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(25),
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 24,
-                            vertical: 12,
-                          ),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                         ),
                         onPressed: () {
+                          final Map<String, dynamic> job =
+                              (data['_raw'] is Map<String, dynamic>) ? data['_raw'] as Map<String, dynamic> : data;
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => const InternshipDetailsPage(),
+                              builder: (_) => InternshipDetailsPage(job: job), // pass full raw job (with id)
                             ),
                           );
                         },
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(
-                              "Apply Now",
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
+                            Text("Apply Now", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
                             SizedBox(width: 8),
-                            Icon(
-                              Icons.arrow_forward,
-                              color: Colors.white,
-                              size: 18,
-                            ),
+                            Icon(Icons.arrow_forward, color: Colors.white, size: 18),
                           ],
                         ),
                       ),
@@ -448,11 +458,7 @@ class InternshipCard extends StatelessWidget {
           Flexible(
             child: Text(
               text,
-              style: TextStyle(
-                fontSize: 12,
-                color: color,
-                fontWeight: FontWeight.w500,
-              ),
+              style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w500),
               overflow: TextOverflow.ellipsis,
               maxLines: 1,
             ),

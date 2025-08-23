@@ -4,14 +4,10 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
-
-  static const String baseUrl = 'http://192.168.41.220:5000'; // For Android emulator
-
+  static const String baseUrl = 'http://192.168.1.11:5000'; // For Android emulator
 
   static Future<bool> testConnection() async {
     try {
-      print('🔍 Testing connection to: $baseUrl/api/auth/signup');
-      
       final response = await http.get(
         Uri.parse('$baseUrl/api/auth/signup'),
         headers: {
@@ -19,13 +15,8 @@ class ApiService {
           'Accept': 'application/json',
         },
       ).timeout(const Duration(seconds: 5));
-      
-      print('🔍 Test response status: ${response.statusCode}');
-      print('🔍 Test response body: ${response.body}');
-      
       return response.statusCode == 405 || response.statusCode == 200 || response.statusCode == 404;
     } catch (e) {
-      print('❌ Connection test failed: $e');
       return false;
     }
   }
@@ -73,16 +64,12 @@ class ApiService {
     required Map<String, dynamic> profileData,
   }) async {
     try {
-      print('🚀 Attempting signup to: $baseUrl/api/auth/signup');
-      
       final requestBody = {
         'email': email,
         'password': password,
-        'userType': userType.toLowerCase(), 
+        'userType': userType.toLowerCase(),
         'profileData': profileData,
       };
-      
-      print('📤 Request body: ${json.encode(requestBody)}');
 
       final response = await http.post(
         Uri.parse('$baseUrl/api/auth/signup'),
@@ -93,41 +80,37 @@ class ApiService {
         body: json.encode(requestBody),
       ).timeout(const Duration(seconds: 15));
 
-      print('📥 Signup response status: ${response.statusCode}');
-      print('📥 Signup response body: ${response.body}');
-
       if (response.statusCode == 201 || response.statusCode == 200) {
         final data = json.decode(response.body);
         return {
-          'success': true, 
+          'success': true,
           'message': data['message'] ?? 'Account created successfully'
         };
       } else {
         final data = json.decode(response.body);
         return {
-          'success': false, 
+          'success': false,
           'message': data['error'] ?? data['message'] ?? 'Signup failed'
         };
       }
     } on SocketException {
       return {
-        'success': false, 
+        'success': false,
         'message': 'No internet connection. Please check your network.'
       };
     } on HttpException {
       return {
-        'success': false, 
+        'success': false,
         'message': 'Server error. Please try again later.'
       };
     } on FormatException {
       return {
-        'success': false, 
+        'success': false,
         'message': 'Invalid response format from server.'
       };
     } catch (e) {
-      print('❌ Signup error: $e');
       return {
-        'success': false, 
+        'success': false,
         'message': 'Network error: $e'
       };
     }
@@ -138,14 +121,10 @@ class ApiService {
     required String password,
   }) async {
     try {
-      print('🚀 Attempting login to: $baseUrl/api/auth/login');
-      
       final requestBody = {
         'email': email,
         'password': password,
       };
-      
-      print('📤 Login request body: ${json.encode(requestBody)}');
 
       final response = await http.post(
         Uri.parse('$baseUrl/api/auth/login'),
@@ -156,13 +135,9 @@ class ApiService {
         body: json.encode(requestBody),
       ).timeout(const Duration(seconds: 15));
 
-      print('📥 Login response status: ${response.statusCode}');
-      print('📥 Login response body: ${response.body}');
-
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        
-        
+
         final prefs = await SharedPreferences.getInstance();
         if (data['token'] != null) {
           await prefs.setString('auth_token', data['token']);
@@ -175,7 +150,7 @@ class ApiService {
         }
 
         return {
-          'success': true, 
+          'success': true,
           'user': data['user'],
           'profile': data['profile'],
           'message': data['message'] ?? 'Login successful'
@@ -183,29 +158,28 @@ class ApiService {
       } else {
         final data = json.decode(response.body);
         return {
-          'success': false, 
+          'success': false,
           'message': data['error'] ?? data['message'] ?? 'Login failed'
         };
       }
     } on SocketException {
       return {
-        'success': false, 
+        'success': false,
         'message': 'No internet connection. Please check your network.'
       };
     } on HttpException {
       return {
-        'success': false, 
+        'success': false,
         'message': 'Server error. Please try again later.'
       };
     } on FormatException {
       return {
-        'success': false, 
+        'success': false,
         'message': 'Invalid response format from server.'
       };
     } catch (e) {
-      print('❌ Login error: $e');
       return {
-        'success': false, 
+        'success': false,
         'message': 'Network error: $e'
       };
     }
@@ -216,5 +190,323 @@ class ApiService {
     await prefs.remove('auth_token');
     await prefs.remove('user_data');
     await prefs.remove('profile_data');
+  }
+
+  // ============================
+  // JOBS API METHODS
+  // ============================
+
+  static Future<Map<String, dynamic>> getJobById(String jobId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/jobs/$jobId'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true && data['job'] != null) {
+          return {
+            'success': true,
+            'job': data['job'],
+            'message': 'Job details fetched successfully'
+          };
+        } else {
+          return {
+            'success': false,
+            'message': data['error'] ?? 'Failed to fetch job details'
+          };
+        }
+      } else if (response.statusCode == 404) {
+        return {
+          'success': false,
+          'message': 'Job not found'
+        };
+      } else {
+        final data = json.decode(response.body);
+        return {
+          'success': false,
+          'message': data['error'] ?? 'Failed to fetch job details'
+        };
+      }
+    } on SocketException {
+      return {
+        'success': false,
+        'message': 'No internet connection. Please check your network.'
+      };
+    } on HttpException {
+      return {
+        'success': false,
+        'message': 'Server error. Please try again later.'
+      };
+    } on FormatException {
+      return {
+        'success': false,
+        'message': 'Invalid response format from server.'
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Network error: $e'
+      };
+    }
+  }
+
+  static Future<Map<String, dynamic>> getAllJobs() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/jobs'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      ).timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true && data['jobs'] != null) {
+          return {
+            'success': true,
+            'jobs': data['jobs'],
+            'count': data['jobs'].length,
+            'message': 'Jobs fetched successfully'
+          };
+        } else {
+          return {
+            'success': false,
+            'message': data['error'] ?? 'Failed to fetch jobs'
+          };
+        }
+      } else if (response.statusCode == 404) {
+        return {
+          'success': false,
+          'message': 'No jobs found',
+          'jobs': [],
+          'count': 0
+        };
+      } else {
+        final data = json.decode(response.body);
+        return {
+          'success': false,
+          'message': data['error'] ?? 'Failed to fetch jobs'
+        };
+      }
+    } on SocketException {
+      return {
+        'success': false,
+        'message': 'No internet connection. Please check your network.'
+      };
+    } on HttpException {
+      return {
+        'success': false,
+        'message': 'Server error. Please try again later.'
+      };
+    } on FormatException {
+      return {
+        'success': false,
+        'message': 'Invalid response format from server.'
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Network error: $e'
+      };
+    }
+  }
+
+  static Future<Map<String, dynamic>> saveInternshipWithStoredApplicant({
+    required String jobId,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    Map<String, dynamic>? profile;
+    Map<String, dynamic>? user;
+
+    try {
+      final p = prefs.getString('profile_data');
+      final u = prefs.getString('user_data');
+      if (p != null) profile = json.decode(p);
+      if (u != null) user = json.decode(u);
+    } catch (_) {}
+
+    final applicantId = (profile?['applicant_id'] ??
+        profile?['id'] ??
+        user?['applicant_id'] ??
+        user?['user_id'] ??
+        user?['id'])?.toString();
+
+    if (applicantId == null || applicantId.isEmpty) {
+      return {'success': false, 'message': 'Applicant ID not found. Please log in again.'};
+    }
+
+    return saveInternship(applicantId: applicantId, jobId: jobId);
+  }
+
+  static Future<Map<String, dynamic>> saveInternship({
+    required String applicantId,
+    required String jobId,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('auth_token');
+
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/api/saved-internships'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+            },
+            body: json.encode({
+              'applicant_id': applicantId,
+              'job_id': jobId,
+            }),
+          )
+          .timeout(const Duration(seconds: 12));
+
+      // Debug: print status code for save internship
+
+      final data = response.body.isNotEmpty ? json.decode(response.body) : null;
+
+      if (response.statusCode == 201) {
+        return {
+          'success': true,
+          'savedInternship': data?['savedInternship'],
+          'message': 'Internship saved',
+        };
+      }
+
+      if (response.statusCode == 409) {
+        return {
+          'success': false,
+          'code': 'ALREADY_SAVED',
+          'message': (data?['error'] ?? 'Internship already saved').toString(),
+        };
+      }
+
+      return {
+        'success': false,
+        'message': (data?['error'] ?? 'Failed to save internship').toString(),
+      };
+    } on SocketException {
+      return {'success': false, 'message': 'No internet connection'};
+    } on HttpException {
+      return {'success': false, 'message': 'Server error'};
+    } on FormatException {
+      return {'success': false, 'message': 'Invalid server response'};
+    } catch (e) {
+      return {'success': false, 'message': 'Network error: $e'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> getSavedInternships(String applicantId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('auth_token');
+
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
+
+      // Attempt 1: path param
+      final url1 = Uri.parse('$baseUrl/api/saved-internships/$applicantId');
+      final resp1 = await http.get(url1, headers: headers).timeout(const Duration(seconds: 12));
+
+      http.Response useResp = resp1;
+
+      // Fallback 2: snake_case query
+      if (useResp.statusCode == 400 || useResp.statusCode == 404) {
+        final url2 = Uri.parse('$baseUrl/api/saved-internships?applicant_id=$applicantId');
+        final resp2 = await http.get(url2, headers: headers).timeout(const Duration(seconds: 12));
+        if (resp2.statusCode != 404) useResp = resp2;
+
+        // Fallback 3: camelCase query
+        if (useResp.statusCode == 400 || useResp.statusCode == 404) {
+          final url3 = Uri.parse('$baseUrl/api/saved-internships?applicantId=$applicantId');
+          final resp3 = await http.get(url3, headers: headers).timeout(const Duration(seconds: 12));
+          useResp = resp3;
+        }
+      }
+
+      if (useResp.statusCode == 200) {
+        final data = json.decode(useResp.body);
+
+        List items = [];
+        if (data['savedInternships'] is List) {
+          items = data['savedInternships'];
+        } else if (data['saved_internships'] is List) {
+          items = data['saved_internships'];
+        } else if (data['items'] is List) {
+          items = data['items'];
+        } else if (data['data'] is List) {
+          items = data['data'];
+        }
+
+        final needsExpand = items.any((e) => e is Map && e['job'] == null && e['job_id'] != null);
+        if (needsExpand) {
+          final expanded = <Map<String, dynamic>>[];
+          for (final it in items) {
+            if (it is! Map) continue;
+            final obj = Map<String, dynamic>.from(it);
+            final jobId = it['job_id']?.toString();
+            if (jobId != null && jobId.isNotEmpty) {
+              final jr = await getJobById(jobId);
+              if (jr['success'] == true && jr['job'] != null) {
+                obj['job'] = jr['job'];
+              }
+            }
+            expanded.add(obj);
+          }
+          return {'success': true, 'savedInternships': expanded};
+        }
+
+        return {'success': true, 'savedInternships': items};
+      }
+
+      if (useResp.statusCode == 404) {
+        return {'success': true, 'savedInternships': []};
+      }
+
+      final err = useResp.body.isNotEmpty ? json.decode(useResp.body) : {};
+      return {'success': false, 'message': err['error'] ?? 'Failed to fetch saved internships'};
+    } on SocketException {
+      return {'success': false, 'message': 'No internet connection'};
+    } on HttpException {
+      return {'success': false, 'message': 'Server error'};
+    } on FormatException {
+      return {'success': false, 'message': 'Invalid server response'};
+    } catch (e) {
+      return {'success': false, 'message': 'Network error: $e'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> getSavedInternshipsWithStoredApplicant() async {
+    final prefs = await SharedPreferences.getInstance();
+    Map<String, dynamic>? profile;
+    Map<String, dynamic>? user;
+
+    try {
+      final p = prefs.getString('profile_data');
+      final u = prefs.getString('user_data');
+      if (p != null) profile = json.decode(p);
+      if (u != null) user = json.decode(u);
+    } catch (_) {}
+
+    final applicantId = (profile?['applicant_id'] ??
+        profile?['id'] ??
+        user?['applicant_id'] ??
+        user?['user_id'] ??
+        user?['id'])?.toString();
+
+    if (applicantId == null || applicantId.isEmpty) {
+      return {'success': false, 'message': 'Applicant ID not found. Please log in again.'};
+    }
+
+    return getSavedInternships(applicantId);
   }
 }

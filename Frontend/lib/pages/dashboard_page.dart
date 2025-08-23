@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'login_page.dart';
 import 'internship_details_page.dart';
 import 'chatbot_page.dart';
+import '../services/api_service.dart'; // <-- add import
 
 class DashboardPage extends StatefulWidget {
   final Function(int)? onSwitchTab;
@@ -24,12 +25,35 @@ class _DashboardPageState extends State<DashboardPage> {
     _ProfileTask('Complete bio/summary', Icons.badge, 'Short value statement.', true),
   ];
 
+  // Recent activities (demo data)
+  final List<Map<String, dynamic>> _recentActivities = [
+    {
+      'title': 'Applied to Flutter Dev Intern',
+      'icon': Icons.send_rounded,
+      'color': Colors.blue,
+      'time': '2h ago',
+    },
+    {
+      'title': 'Interview scheduled with OpenAI',
+      'icon': Icons.video_call_rounded,
+      'color': Colors.orange,
+      'time': '1d ago',
+    },
+    {
+      'title': 'Saved ML Intern at AWS',
+      'icon': Icons.bookmark_rounded,
+      'color': Colors.green,
+      'time': '3d ago',
+    },
+  ];
+
   double get _profileCompletion => _profileTasks.where((t)=>t.done).length / _profileTasks.length;
 
   @override
   void initState() {
     super.initState();
     _statsController = PageController(viewportFraction: .88);
+    _fetchSavedInternships(); // <-- load saved items
   }
 
   @override
@@ -385,7 +409,20 @@ class _DashboardPageState extends State<DashboardPage> {
           return Container(
             width: 260,
             margin: EdgeInsets.only(right: i==data.length-1?0:16),
-            child: _SavedHorizontalCard(item: it, onDetails: () => Navigator.push(context, MaterialPageRoute(builder: (_)=> const InternshipDetailsPage()))),
+            child: _SavedHorizontalCard(
+              item: it,
+              onDetails: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => InternshipDetailsPage(
+                    // push the whole raw backend item; fall back to mapped item
+                    job: (it['_raw'] is Map)
+                        ? Map<String, dynamic>.from(it['_raw'] as Map)
+                        : it,
+                  ),
+                ),
+              ),
+            ),
           );
         },
       ),
@@ -487,17 +524,86 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   // Data -----------------------------------------------------------------
-  final List<Map<String,dynamic>> _savedInternships = [
-    {'title':'Software Engineering Intern','company':'Google','location':'Remote • USA','type':'Full-time','logo':Icons.computer,'color':Colors.blue,'salary':'\$8k/mo','savedDate':'2d'},
-    {'title':'Data Science Intern','company':'Microsoft','location':'Hybrid • USA','type':'Full-time','logo':Icons.analytics,'color':Colors.green,'salary':'\$7.5k/mo','savedDate':'1w'},
-    {'title':'UX Design Intern','company':'Apple','location':'Onsite • CA','type':'Part-time','logo':Icons.design_services,'color':Colors.grey,'salary':'\$6k/mo','savedDate':'3d'},
-  ];
+  // Replace hard-coded demo with backend data
+  List<Map<String,dynamic>> _savedInternships = []; // <-- was final demo list
 
-  final List<Map<String,dynamic>> _recentActivities = [
-    {'title':'Applied to Frontend Developer – Netflix','time':'2h ago','icon':Icons.send_rounded,'color':Colors.blue},
-    {'title':'Saved Backend Engineer – Spotify','time':'1d ago','icon':Icons.bookmark_add_rounded,'color':Colors.orange},
-    {'title':'Interview scheduled – Amazon','time':'2d ago','icon':Icons.calendar_month_rounded,'color':Colors.green},
-  ];
+  Future<void> _fetchSavedInternships() async {
+    final res = await ApiService.getSavedInternshipsWithStoredApplicant();
+    if (!mounted) return;
+    if (res['success'] == true) {
+      final list = (res['savedInternships'] as List? ?? [])
+          .map<Map<String,dynamic>>((e) => _mapSavedBackendItem(e as Map))
+          .toList();
+      setState(() => _savedInternships = list);
+    } else {
+      // Keep empty silently; UI design unchanged
+    }
+  }
+
+  // Map backend saved item -> card shape (keeps existing design)
+  Map<String, dynamic> _mapSavedBackendItem(Map src) {
+    // API may return { id, applicant_id, job_id, saved_at, job: {...} } or just the job itself
+    final Map job = (src['job'] is Map) ? (src['job'] as Map) : src;
+
+    final title = (job['title'] ?? 'Internship').toString();
+    final company = (job['company_name'] ?? 'Unknown Company').toString();
+    final location = (job['location'] ?? job['employment_type'] ?? 'Remote').toString();
+    final stipend = (job['stipend'] ?? 'N/A').toString();
+    final savedIso = (src['saved_at'] ?? job['updated_at'] ?? job['created_at'])?.toString();
+
+    final icon = _pickIconForTitle(title);
+    final color = _pickColorForTitle(title);
+
+    return {
+      'title': title,
+      'company': company,
+      'location': location,
+      'type': (job['role_type'] ?? 'Internship').toString(),
+      'logo': icon,          // IconData for existing card UI
+      'color': color,        // Color for existing card UI
+      'salary': stipend,     // shown as salary in card
+      'savedDate': _relativeShort(savedIso), // e.g., "2d"
+      // keep the full raw backend item for Details navigation
+      '_raw': Map<String, dynamic>.from(src),
+    };
+  }
+
+  IconData _pickIconForTitle(String t) {
+    final s = t.toLowerCase();
+    if (s.contains('data') || s.contains('ml') || s.contains('ai')) return Icons.analytics;
+    if (s.contains('design') || s.contains('ui') || s.contains('ux')) return Icons.design_services;
+    if (s.contains('cloud') || s.contains('devops')) return Icons.cloud;
+    if (s.contains('mobile') || s.contains('android') || s.contains('ios') || s.contains('flutter')) return Icons.phone_iphone;
+    return Icons.computer;
+  }
+
+  Color _pickColorForTitle(String t) {
+    final s = t.toLowerCase();
+    if (s.contains('data') || s.contains('ml') || s.contains('ai')) return Colors.green;
+    if (s.contains('design') || s.contains('ui') || s.contains('ux')) return Colors.purple;
+    if (s.contains('cloud') || s.contains('devops')) return Colors.blueGrey;
+    if (s.contains('mobile') || s.contains('android') || s.contains('ios') || s.contains('flutter')) return Colors.orange;
+    return Colors.blue;
+  }
+
+  String _relativeShort(String? iso) {
+    if (iso == null || iso.isEmpty) return 'now';
+    try {
+      final dt = DateTime.parse(iso).toLocal();
+      final diff = DateTime.now().difference(dt);
+      if (diff.inMinutes < 60) return '${diff.inMinutes}m';
+      if (diff.inHours < 24) return '${diff.inHours}h';
+      if (diff.inDays < 7) return '${diff.inDays}d';
+      final w = (diff.inDays / 7).floor();
+      if (w < 5) return '${w}w';
+      final mo = (diff.inDays / 30).floor();
+      return '${mo}mo';
+    } catch (_) {
+      return 'recent';
+    }
+  }
+
+  // (Removed unused _mapSavedToJob method)
 }
 
 // Reusable small widgets --------------------------------------------------

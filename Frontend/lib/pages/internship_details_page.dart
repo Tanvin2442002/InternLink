@@ -1,11 +1,78 @@
 import 'package:flutter/material.dart';
 import 'application_form_page.dart';
+import '../services/api_service.dart'; // <-- add this import
 
 class InternshipDetailsPage extends StatelessWidget {
-  const InternshipDetailsPage({super.key});
+  final Map<String, dynamic> job;
+  const InternshipDetailsPage({super.key, required this.job});
+
+  String _formatDate(String? iso) {
+    if (iso == null || iso.isEmpty) return 'N/A';
+    try {
+      final dt = DateTime.parse(iso).toLocal();
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      return '${months[dt.month - 1]} ${dt.day}, ${dt.year}';
+    } catch (_) {
+      return 'N/A';
+    }
+  }
+
+  IconData _perkIcon(String key) {
+    switch (key.toLowerCase()) {
+      case 'clock': return Icons.access_time;
+      case 'graduation-cap': return Icons.school;
+      case 'certificate': return Icons.verified;
+      case 'users': return Icons.group;
+      case 'trending-up': return Icons.trending_up;
+      case 'gift': return Icons.card_giftcard;
+      default: return Icons.star_border;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final company = (job['company_name'] ?? 'Unknown Company').toString();
+    final title   = (job['title'] ?? 'Internship').toString();
+    final logoUrl = (job['company_logo_url'] ?? '').toString();
+
+    // chips (prefer tags; else fallback to location/duration/stipend)
+    final List<String> tags = (job['tags'] is List)
+        ? (job['tags'] as List).map((e) => e.toString()).toList()
+        : <String>[];
+
+    final location = (job['location'] ?? job['employment_type'] ?? 'Remote').toString();
+    final duration = job['duration_months'] != null
+        ? '${(job['duration_months'] is num ? (job['duration_months'] as num).toInt() : int.tryParse(job['duration_months'].toString()) ?? 0)} Months'
+        : 'N/A';
+    final stipend = (job['stipend'] ?? 'N/A').toString();
+
+    final appliedCount = job['applied_count']?.toString() ?? '0';
+    final postedReadable = (job['extra_meta'] is Map && job['extra_meta']['posted_readable'] != null)
+        ? job['extra_meta']['posted_readable'].toString()
+        : null;
+    final closingDate = _formatDate(job['closing_date']?.toString());
+
+    final companyDesc = (job['company_description'] ?? '').toString();
+
+    final List<String> roleOverview = (job['role_overview'] is List)
+        ? (job['role_overview'] as List).map((e) => e.toString()).toList()
+        : const [];
+
+    final List<String> skills = (job['required_skills'] is List)
+        ? (job['required_skills'] as List).map((e) => e.toString()).toList()
+        : const [];
+
+    final List<String> eligibility = (job['eligibility'] is List)
+        ? (job['eligibility'] as List).map((e) => e.toString()).toList()
+        : const [];
+
+    final List<Map<String, dynamic>> perks = (job['perks'] is List)
+        ? (job['perks'] as List)
+            .map((p) => (p is Map) ? p.map((k, v) => MapEntry(k.toString(), v)) : <String, dynamic>{})
+            .cast<Map<String, dynamic>>()
+            .toList()
+        : const [];
+
     return Scaffold(
       appBar: AppBar(
         title: const Text("Internship Details"),
@@ -17,25 +84,34 @@ class InternshipDetailsPage extends StatelessWidget {
         children: [
           Row(
             children: [
-              const CircleAvatar(
-                backgroundImage: NetworkImage(
-                  "https://logo.clearbit.com/github.com",
-                ),
+              CircleAvatar(
                 radius: 32,
+                backgroundColor: Colors.grey[200],
+                child: ClipOval(
+                  child: logoUrl.isNotEmpty
+                      ? Image.network(
+                          logoUrl,
+                          width: 64,
+                          height: 64,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) =>
+                              const Icon(Icons.business, color: Colors.grey, size: 28),
+                        )
+                      : const Icon(Icons.business, color: Colors.grey, size: 28),
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
+                  children:  [
                     Text(
-                      "Frontend Developer Intern",
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      title,
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 2,
                     ),
-                    Text("TechVision Labs"),
+                    Text(company, overflow: TextOverflow.ellipsis),
                   ],
                 ),
               ),
@@ -44,66 +120,54 @@ class InternshipDetailsPage extends StatelessWidget {
           const SizedBox(height: 12),
           Wrap(
             spacing: 8,
-            children: const [
-              Chip(label: Text("Remote")),
-              Chip(label: Text("3 Months")),
-              Chip(label: Text("\$300/month")),
-            ],
+            children: (tags.isNotEmpty ? tags : <String>[location, duration, stipend])
+                .map((t) => Chip(label: Text(t)))
+                .toList(),
           ),
           const SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
-              InfoIcon(icon: Icons.person_outline, label: '124 Applied'),
-              InfoIcon(icon: Icons.access_time, label: '2 days ago'),
-              InfoIcon(icon: Icons.calendar_today, label: 'Jul 30, 2023'),
+            children: [
+              InfoIcon(icon: Icons.person_outline, label: '$appliedCount Applied'),
+              InfoIcon(icon: Icons.access_time, label: postedReadable ?? 'Recently'),
+              InfoIcon(icon: Icons.calendar_today, label: closingDate),
             ],
           ),
           const SizedBox(height: 24),
-          const SectionHeader("About TechVision Labs"),
-          const Text(
-            "TechVision Labs is a leading software development company specializing in AI-powered solutions...",
+          SectionHeader("About $company"),
+          Text(
+            companyDesc.isNotEmpty
+                ? companyDesc
+                : "Company description not provided.",
           ),
           const SizedBox(height: 16),
           const SectionHeader("Role Overview"),
-          BulletList([
-            "Work on frontend development using React",
-            "Collaborate with senior developers",
-            "Participate in code reviews",
-            "Learn modern development practices",
-          ]),
+          BulletList(
+            roleOverview.isNotEmpty ? roleOverview : const ["Details not provided."],
+          ),
           const SectionHeader("Required Skills"),
           Wrap(
             spacing: 8,
-            children: const [
-              Chip(label: Text("HTML/CSS")),
-              Chip(label: Text("JavaScript")),
-              Chip(label: Text("React Basics")),
-              Chip(label: Text("Git")),
-              Chip(label: Text("Problem Solving")),
-            ],
+            children: skills.isEmpty
+                ? [Text('Not specified', style: TextStyle(color: Colors.grey[700]))]
+                : skills.map((s) => Chip(label: Text(s))).toList(),
           ),
           const SectionHeader("Eligibility"),
-          BulletList([
-            "Currently pursuing Computer Science or related field",
-            "Minimum GPA of 3.0",
-            "Available for 3 months full-time",
-          ]),
+          BulletList(
+            eligibility.isNotEmpty ? eligibility : const ["Not specified"],
+          ),
           const SectionHeader("Perks & Benefits"),
           Wrap(
             spacing: 12,
             runSpacing: 12,
-            children: const [
-              BenefitItem(icon: Icons.access_time, label: "Flexible Hours"),
-              BenefitItem(icon: Icons.school, label: "Learning Resources"),
-              BenefitItem(icon: Icons.verified, label: "Certificate"),
-              BenefitItem(icon: Icons.group, label: "Mentorship"),
-              BenefitItem(icon: Icons.trending_up, label: "Career Growth"),
-              BenefitItem(
-                icon: Icons.card_giftcard,
-                label: "Performance Bonus",
-              ),
-            ],
+            children: perks.isEmpty
+                ? const [Text('Not specified')]
+                : perks
+                    .map((p) => BenefitItem(
+                          icon: _perkIcon((p['icon'] ?? '').toString()),
+                          label: (p['name'] ?? '').toString(),
+                        ))
+                    .toList(),
           ),
           const SizedBox(height: 24),
           Row(
@@ -111,8 +175,8 @@ class InternshipDetailsPage extends StatelessWidget {
               Expanded(
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.deepPurple, 
-                    foregroundColor: Colors.white, 
+                    backgroundColor: Colors.deepPurple,
+                    foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -121,9 +185,9 @@ class InternshipDetailsPage extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const ApplicationFormPage(
-                          internshipTitle: "Frontend Developer Intern",
-                          companyName: "TechVision Labs",
+                        builder: (context) => ApplicationFormPage(
+                          internshipTitle: title,
+                          companyName: company,
                         ),
                       ),
                     );
@@ -133,7 +197,43 @@ class InternshipDetailsPage extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               OutlinedButton(
-                onPressed: () {},
+                onPressed: () async {
+                  final jobId = job['id']?.toString();
+                  if (jobId == null || jobId.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Job ID missing.')),
+                    );
+                    return;
+                  }
+
+                  final messenger = ScaffoldMessenger.of(context);
+                  messenger.showSnackBar(
+                    const SnackBar(content: Text('Saving internship...')),
+                  );
+
+                  final res = await ApiService.saveInternshipWithStoredApplicant(jobId: jobId);
+
+                  messenger.hideCurrentSnackBar();
+                  if (res['success'] == true) {
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: const Text('Saved to your internships'),
+                        backgroundColor: Colors.green, // success: green
+                      ),
+                    );
+                  } else {
+                    final code = res['code']?.toString();
+                    final msg = code == 'ALREADY_SAVED'
+                        ? 'This internship is already saved'
+                        : (res['message']?.toString() ?? 'Failed to save internship');
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: Text(msg),
+                        backgroundColor: Colors.red, // error/already saved: red
+                      ),
+                    );
+                  }
+                },
                 child: const Text("Save for Later"),
               ),
             ],
