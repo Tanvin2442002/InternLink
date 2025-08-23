@@ -1,5 +1,10 @@
 const express = require("express");
 const sql = require("../DB/connection");
+const https = require("https");
+const { GoogleGenerativeAI, SchemaType } = require("@google/generative-ai");
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+const { matchJobs } = require("./matchService");
 
 const router = express.Router();
 
@@ -32,23 +37,79 @@ router.get("/jobs/:id", async (req, res) => {
   }
 });
 
-router.get("/jobs", async (req, res) => {
+// Add this NEW route handler for /alljobs/:applicant_id
+router.get("/alljobs/:applicant_id", async (req, res) => {
   try {
-    // Fetch all jobs from the database
-    const rows = await sql`
-      SELECT * FROM jobs
-    `;
-
+    const rows = await sql`SELECT * FROM jobs`;
     if (!rows || rows.length === 0) {
-      return res.status(404).json({ success: false, error: "No jobs found" });
+      return res.status(404).json({ error: "No jobs found" });
     }
 
-    return res.status(200).json({ success: true, jobs: rows });
+    const applicantId = req.params.applicant_id;
+    console.log("applicant_id:", applicantId);
+
+    let cvUrl = null;
+    try {
+      const cv = await sql`SELECT cv_url FROM applicants WHERE applicant_id = ${applicantId}`;
+      console.log("CV query result:", cv);
+      cvUrl = cv && cv.length > 0 ? cv[0].cv_url : null;
+    } catch (err) {
+      console.error("[Jobs] CV fetch error:", err);
+      // Continue without CV - will use local matching
+    }
+
+    console.log("[Jobs] cvUrl:", cvUrl ? "(provided)" : "(none)");
+
+    // Always try to use Gemini with CV if available
+    const result = await matchJobs({ jobs: rows, cvUrl });
+    console.log("[Jobs] matchJobs result:", result);
+    
+    // Filter the original rows to only include matched jobs
+    const matchedJobs = rows.filter(job => result.matches.includes(job.id));
+    console.log("[Jobs] Filtered matched jobs:", matchedJobs.length, "out of", rows.length);
+    
+    return res.json({ 
+      success: true, 
+      jobs: matchedJobs,
+      matches: result.matches,
+      scores: result.scores,
+      source: result.source,
+      totalJobsCount: rows.length,
+      matchedJobsCount: matchedJobs.length
+    });
   } catch (error) {
-    console.error("Error fetching jobs:", error);
-    return res
-      .status(500)
-      .json({ success: false, error: "Internal server error" });
+    console.error("[Jobs] /alljobs/:applicant_id error:", error);
+    return res.status(500).json({ error: "Failed to fetch jobs" });
+  }
+});
+
+router.get("/alljobs/:cvurl", async (req, res) => {
+  try {
+    const rows = await sql`SELECT * FROM jobs`;
+    if (!rows || rows.length === 0) {
+      return res.status(404).json({ error: "No jobs found" });
+    }
+    const cvUrl = req.params.cvurl;
+    const useGemini = ["1", "true", "yes", "on"].includes(
+      (req.query.useGemini || req.query.use_gemini || "")
+        .toString()
+        .toLowerCase()
+    );
+
+    console.log(
+      "[Jobs] useGemini query parsed as:",
+      useGemini,
+      "cvUrl:",
+      cvUrl ? "(provided)" : "(none)"
+    );
+
+    // Pass the flag to the matcher
+    const result = await matchJobs({ jobs: rows, cvUrl, useGemini });
+
+    return res.json({ success: true, ...result, jobsCount: rows.length });
+  } catch (error) {
+    console.error("[Jobs] /jobs error:", error);
+    return res.status(500).json({ error: "Failed to fetch jobs" });
   }
 });
 
@@ -122,3 +183,7 @@ router.get("/saved-internships/:applicant_id", async (req, res) => {
 });
 
 module.exports = router;
+
+/*
+
+*/

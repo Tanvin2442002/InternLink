@@ -255,10 +255,21 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>> getAllJobs() async {
+  static Future<Map<String, dynamic>> getAllJobs({String? applicantId}) async {
     try {
+      // Build URL properly - handle null case
+      String url;
+      if (applicantId != null && applicantId.isNotEmpty) {
+        print("Fetching all jobs for applicant_id: $applicantId");
+        url = '$baseUrl/api/alljobs/$applicantId';
+      } else {
+        print("Fetching all jobs without personalization");
+        // Use a general jobs endpoint or the cvurl endpoint with 'null'
+        url = '$baseUrl/api/alljobs/null'; // This will hit the cvurl route
+      }
+
       final response = await http.get(
-        Uri.parse('$baseUrl/api/jobs'),
+        Uri.parse(url),
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
@@ -267,12 +278,16 @@ class ApiService {
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        if (data['success'] == true && data['jobs'] != null) {
+        if (data['success'] == true) {
+          // Handle both direct jobs array and nested structure
+          final jobs = data['jobs'] ?? data['matches'] ?? [];
           return {
             'success': true,
-            'jobs': data['jobs'],
-            'count': data['jobs'].length,
-            'message': 'Jobs fetched successfully'
+            'jobs': jobs,
+            'count': jobs.length,
+            'message': 'Jobs fetched successfully',
+            'source': data['source'], // 'gemini' or 'local'
+            'scores': data['scores'], // matching scores if available
           };
         } else {
           return {
@@ -317,6 +332,32 @@ class ApiService {
     }
   }
 
+  // Enhanced helper method with better error handling
+  static Future<Map<String, dynamic>> getAllJobsWithStoredApplicant() async {
+    final prefs = await SharedPreferences.getInstance();
+    Map<String, dynamic>? profile;
+    Map<String, dynamic>? user;
+
+    try {
+      final p = prefs.getString('profile_data');
+      final u = prefs.getString('user_data');
+      if (p != null) profile = json.decode(p);
+      if (u != null) user = json.decode(u);
+    } catch (_) {}
+
+    final applicantId = (profile?['applicant_id'] ??
+        profile?['id'] ??
+        user?['applicant_id'] ??
+        user?['user_id'] ??
+        user?['id'])?.toString();
+
+    if (applicantId == null || applicantId.isEmpty) {
+      return {'success': false, 'message': 'Applicant ID not found. Please log in again.'};
+    } 
+    print("Using applicant_id: $applicantId to fetch jobs");
+    return getAllJobs(applicantId: applicantId);
+  }
+
   static Future<Map<String, dynamic>> saveInternshipWithStoredApplicant({
     required String jobId,
   }) async {
@@ -340,7 +381,7 @@ class ApiService {
     if (applicantId == null || applicantId.isEmpty) {
       return {'success': false, 'message': 'Applicant ID not found. Please log in again.'};
     }
-
+    
     return saveInternship(applicantId: applicantId, jobId: jobId);
   }
 

@@ -27,7 +27,7 @@ class _InternshipListPageState extends State<InternshipListPage> {
       _error = null;
     });
 
-    final result = await ApiService.getAllJobs();
+    final result = await ApiService.getAllJobsWithStoredApplicant();
     if (!mounted) return;
 
     if (result['success'] == true) {
