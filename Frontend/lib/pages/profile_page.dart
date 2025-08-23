@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
-// import 'package:file_picker/file_picker.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter/services.dart';
+import '../services/uploadservice.dart';
 
 class ProfilePage extends StatefulWidget {
   final VoidCallback onCvUploaded;
@@ -11,122 +15,389 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
+  // Applicant data
+  bool isLoading = true;
+  String? loadError;
+  Map<String, dynamic>? applicant;
+
+  // Upload state
   bool isCvUploaded = false;
   String? selectedFileName;
-
-  // void uploadCV() async {
-  //   final result = await FilePicker.platform.pickFiles(
-  //     type: FileType.custom,
-  //     allowedExtensions: ['pdf', 'doc', 'docx'],
-  //   );
-
-  //   if (result != null && result.files.single.size <= 5 * 1024 * 1024) {
-  //     setState(() {
-  //       selectedFileName = result.files.single.name;
-  //       isCvUploaded = true;
-  //     });
-  //     widget.onCvUploaded();
-  //   } else {
-  //     ScaffoldMessenger.of(context).showSnackBar(
-  //       const SnackBar(content: Text("Invalid file or size > 5MB")),
-  //     );
-  //   }
-  // }
+  String? selectedFilePath;
+  bool isUploading = false;
+  String? lastUploadedUrl;
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text("Profile")),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
+  void initState() {
+    super.initState();
+    _fetchApplicant();
+  }
+
+  Future<void> _fetchApplicant() async {
+    setState(() {
+      isLoading = true;
+      loadError = null;
+    });
+
+    final res = await UploadService.getApplicantInfo();
+    if (!mounted) return;
+
+    if (res['success'] == true) {
+      final data = (res['applicant'] is Map<String, dynamic>) ? res['applicant'] as Map<String, dynamic> : <String, dynamic>{};
+      final cvUrl = (data['cv_url'] ?? '').toString();
+      setState(() {
+        applicant = data;
+        lastUploadedUrl = cvUrl.isNotEmpty ? cvUrl : null;
+        isCvUploaded = cvUrl.isNotEmpty;
+        isLoading = false;
+      });
+    } else {
+      setState(() {
+        loadError = res['message']?.toString() ?? 'Failed to load profile';
+        isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _previewRemote(String url) async {
+    if (url.isEmpty) return;
+    final ok = await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Unable to open CV URL')));
+    }
+  }
+
+  Future<void> _previewLocal(String path) async {
+    try {
+      final result = await OpenFilex.open(path);
+      if (result.type != ResultType.done && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Preview failed: ${result.message ?? 'Unknown error'}')),
+        );
+      }
+    } on MissingPluginException {
+      // Fallback to system handler
+      final ok = await launchUrl(Uri.file(path), mode: LaunchMode.externalApplication);
+      if (!ok && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Preview unavailable. Do a full rebuild: flutter clean, then flutter run.')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Preview error: $e')));
+    }
+  }
+
+  Future<bool?> _confirmUploadDialog({
+    required String name,
+    required int sizeBytes,
+    required String path,
+  }) {
+    final sizeMB = (sizeBytes / (1024 * 1024)).toStringAsFixed(2);
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Upload CV?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (!isCvUploaded)
-              Container(
-                padding: const EdgeInsets.all(12),
-                color: Colors.red.shade100,
-                child: const Row(
-                  children: [
-                    Icon(Icons.warning, color: Colors.red),
-                    SizedBox(width: 8),
-                    Expanded(child: Text("Please upload your CV to continue", style: TextStyle(color: Colors.red))),
-                  ],
-                ),
-              ),
-            const SizedBox(height: 16),
-            CircleAvatar(
-              radius: 40,
-              child: Icon(Icons.person, size: 40),
-            ),
-            const SizedBox(height: 8),
-            const Text("Pallab", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            TextButton(onPressed: () {}, child: const Text("Edit Profile")),
-
-            const SizedBox(height: 16),
-            buildInfoTile("Full Name", "Pallab"),
-            buildInfoTile("Email Address", "pallab@gmail.com"),
-            buildInfoTile("University", "MIST"),
-            buildInfoTile("Major/Course", "Computer Science"),
-            buildInfoTile("Expected Graduation", "March 2026"),
-
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                children: [
-                  const Icon(Icons.cloud_upload_outlined, size: 40),
-                  const SizedBox(height: 8),
-                  Text(selectedFileName ?? "Upload your CV"),
-                  const Text("Supported formats: PDF, DOC, DOCX (Max 5MB)"),
-                  const SizedBox(height: 10),
-                  // ElevatedButton(
-                  //   onPressed: uploadCV,
-                  //   child: const Text("Choose File"),
-                  // ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 16),
-            Row(
-              children: const [
-                Text("Skills", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                Spacer(),
-                Text("Edit", style: TextStyle(color: Colors.blue)),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              children: const [
-                Chip(label: Text("React")),
-                Chip(label: Text("JavaScript")),
-                Chip(label: Text("UI/UX Design")),
-                Chip(label: Text("TypeScript")),
-              ],
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () {},
-              style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(50)),
-              child: const Text("Save Changes"),
-            ),
+            Text('File: $name'),
+            const SizedBox(height: 6),
+            Text('Size: $sizeMB MB'),
+            const SizedBox(height: 12),
+            const Text('Make sure this is the correct PDF.'),
           ],
         ),
+        actions: [
+          TextButton(
+            onPressed: () => _previewLocal(path),
+            child: const Text('Preview'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Upload'),
+          ),
+        ],
       ),
     );
   }
 
-  Widget buildInfoTile(String title, String value) {
+  Future<void> uploadCV() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf'],
+      withData: false,
+    );
+    if (result == null) return; // canceled
+
+    final file = result.files.single;
+    if (file.path == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Unable to read file path')));
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('File too large (max 5MB)')));
+      return;
+    }
+
+    // Confirm before uploading
+    final confirm = await _confirmUploadDialog(name: file.name, sizeBytes: file.size, path: file.path!);
+    if (confirm != true) return;
+
+    setState(() {
+      selectedFileName = file.name;
+      selectedFilePath = file.path!;
+      isUploading = true;
+    });
+
+    final res = await UploadService.uploadCvFile(filePath: selectedFilePath!);
+
+    if (!mounted) return;
+    setState(() {
+      isUploading = false;
+      isCvUploaded = res['success'] == true;
+      lastUploadedUrl = res['cvUrl']?.toString() ?? lastUploadedUrl;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(res['message']?.toString() ?? (res['success'] == true ? 'Upload successful' : 'Upload failed')),
+        backgroundColor: res['success'] == true ? Colors.green : Colors.red,
+      ),
+    );
+
+    if (res['success'] == true) {
+      widget.onCvUploaded();
+      // Refresh to reflect new cv_url if backend saved it
+      _fetchApplicant();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cvUrl = lastUploadedUrl ?? (applicant?['cv_url']?.toString() ?? '');
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Profile"),
+        actions: [
+          IconButton(
+            onPressed: isLoading ? null : _fetchApplicant,
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh',
+          ),
+        ],
+      ),
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : loadError != null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.error_outline, color: Colors.red, size: 36),
+                        const SizedBox(height: 8),
+                        Text(loadError!, textAlign: TextAlign.center),
+                        const SizedBox(height: 12),
+                        ElevatedButton(onPressed: _fetchApplicant, child: const Text('Retry')),
+                      ],
+                    ),
+                  ),
+                )
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      // Header card (responsive, no overflow)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(colors: [Colors.indigo.shade500, Colors.indigo.shade300]),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            const CircleAvatar(
+                              radius: 32,
+                              backgroundColor: Colors.white,
+                              child: Icon(Icons.person, size: 36, color: Colors.indigo),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    (applicant?['full_name'] ?? 'Applicant').toString(),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    (applicant?['student_email'] ?? '').toString(),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(color: Colors.white.withOpacity(.95)),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: isCvUploaded ? Colors.greenAccent.shade100 : Colors.orangeAccent.shade100,
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(isCvUploaded ? Icons.check_circle : Icons.info, size: 16, color: Colors.black87),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    isCvUploaded ? 'CV on file' : 'CV missing',
+                                    style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.black87),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Details card (no IDs displayed)
+                      _buildSectionCard(
+                        title: 'About',
+                        child: Column(
+                          children: [
+                            _buildInfoTile('University', (applicant?['university_name'] ?? '—').toString(), leading: Icons.school),
+                            _buildInfoTile('Major', (applicant?['major'] ?? '—').toString(), leading: Icons.menu_book),
+                            _buildInfoTile('Phone', (applicant?['phone_number'] ?? '—').toString(), leading: Icons.phone),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // CV card
+                      _buildSectionCard(
+                        title: 'Curriculum Vitae',
+                        icon: Icons.description_outlined,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (selectedFileName != null)
+                              Text(
+                                selectedFileName!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontWeight: FontWeight.w600),
+                              )
+                            else
+                              const Text('Upload your CV (PDF)', style: TextStyle(fontWeight: FontWeight.w600)),
+                            const SizedBox(height: 4),
+                            const Text('Supported: PDF (Max 5MB)', style: TextStyle(color: Colors.grey)),
+                            const SizedBox(height: 10),
+                            // Wrap avoids overflow on small screens
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                ElevatedButton.icon(
+                                  onPressed: isUploading ? null : uploadCV,
+                                  icon: Icon(isUploading ? Icons.hourglass_top : Icons.upload_file),
+                                  label: Text(isUploading ? 'Uploading...' : 'Choose PDF and Upload'),
+                                ),
+                                OutlinedButton.icon(
+                                  onPressed: (cvUrl.isNotEmpty && !isUploading) ? () => _previewRemote(cvUrl) : null,
+                                  icon: const Icon(Icons.visibility_outlined),
+                                  label: const Text('Preview current CV'),
+                                ),
+                                if (selectedFilePath != null && !isUploading)
+                                  OutlinedButton.icon(
+                                    onPressed: () => _previewLocal(selectedFilePath!),
+                                    icon: const Icon(Icons.remove_red_eye_outlined),
+                                    label: const Text('Preview selected'),
+                                  ),
+                              ],
+                            ),
+                            // Do not show raw cv_url string per request
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: OutlinedButton.icon(
+                          onPressed: _fetchApplicant,
+                          icon: const Icon(Icons.sync),
+                          label: const Text('Refresh Profile'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+    );
+  }
+
+  // Helper to build a consistent card for each section
+  Widget _buildSectionCard({required String title, IconData? icon, required Widget child}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: Colors.grey.shade200),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: const [BoxShadow(color: Color(0x11000000), blurRadius: 6, offset: Offset(0, 3))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              if (icon != null) ...[
+                Icon(icon, color: Colors.indigo),
+                const SizedBox(width: 8),
+              ],
+              Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          child,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoTile(String title, String value, {IconData? leading}) {
     return ListTile(
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
-      subtitle: Text(value),
-      trailing: const Icon(Icons.chevron_right),
-      onTap: () {},
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+      leading: leading != null ? Icon(leading, color: Colors.indigo) : null,
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+      subtitle: Text(
+        value,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+      ),
     );
   }
 }
