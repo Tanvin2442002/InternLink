@@ -6,6 +6,8 @@ import 'package:interlink/pages/boarding3.dart';
 import 'package:interlink/pages/login_page.dart';
 import 'package:interlink/pages/main_nav_page.dart';
 import 'package:interlink/pages/recruiter_main_nav_page.dart';
+import 'package:interlink/pages/forgot_password_page.dart';
+import 'package:interlink/pages/reset_password_page.dart';
 import 'services/api_service.dart';
 
 void main() async {
@@ -30,6 +32,7 @@ class InternshipApp extends StatelessWidget {
         '/login': (context) => const LoginPage(),
         '/main': (context) => const MainNavigationPage(),
         '/recruiter_main': (context) => const RecruiterMainNavigationPage(),
+        '/forgot-password': (context) => const ForgotPasswordPage(),
       },
       theme: ThemeData(
         primarySwatch: Colors.deepPurple,
