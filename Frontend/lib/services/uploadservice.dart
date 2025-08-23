@@ -196,4 +196,108 @@ class UploadService {
       return {'success': false, 'message': 'Unexpected error: $e'};
     }
   }
+
+  static Future<Map<String, dynamic>> updateApplicantInfo({
+    String? applicantIdOverride,
+    String? fullName,
+    String? universityName,
+    String? major,
+    String? phoneNumber,
+    String? studentEmail,
+    String? cvUrl,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('auth_token');
+
+      Map<String, dynamic>? profile;
+      Map<String, dynamic>? user;
+      try {
+        final p = prefs.getString('profile_data');
+        final u = prefs.getString('user_data');
+        if (p != null) profile = json.decode(p);
+        if (u != null) user = json.decode(u);
+      } catch (_) {}
+
+      final applicantId = (applicantIdOverride ??
+              profile?['applicant_id'] ??
+              profile?['id'] ??
+              user?['applicant_id'] ??
+              user?['user_id'] ??
+              user?['id'])
+          ?.toString();
+
+      if (applicantId == null || applicantId.isEmpty) {
+        return {'success': false, 'message': 'Applicant ID not found'};
+      }
+
+      final payload = <String, dynamic>{};
+      if (fullName != null) payload['full_name'] = fullName;
+      if (universityName != null) payload['university_name'] = universityName;
+      if (major != null) payload['major'] = major;
+      if (phoneNumber != null) payload['phone_number'] = phoneNumber;
+      if (studentEmail != null) payload['student_email'] = studentEmail;
+      if (cvUrl != null) payload['cv_url'] = cvUrl;
+
+      if (payload.isEmpty) {
+        return {'success': false, 'message': 'No fields provided to update'};
+      }
+
+      final headers = <String, String>{
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
+
+      final base = ApiService.baseUrl;
+      final uri = Uri.parse('$base/api/update/$applicantId');
+
+      final resp = await http
+          .post(uri, headers: headers, body: json.encode(payload))
+          .timeout(const Duration(seconds: 12));
+
+      // ignore: avoid_print
+      print('[UploadService] POST $uri -> ${resp.statusCode}');
+
+      final raw = resp.body.trim();
+      Map<String, dynamic> body = {};
+      try {
+        if (raw.isNotEmpty) {
+          final decoded = json.decode(raw);
+          if (decoded is Map<String, dynamic>) body = decoded;
+        }
+      } catch (_) {}
+
+      if (resp.statusCode == 200) {
+        final updated = (body['applicant'] is Map<String, dynamic>)
+            ? body['applicant'] as Map<String, dynamic>
+            : <String, dynamic>{};
+        return {'success': true, 'applicant': updated, 'message': body['message'] ?? 'Updated'};
+      }
+
+      if (resp.statusCode == 404) {
+        return {'success': false, 'message': 'Applicant not found', 'status': 404};
+      }
+
+      if (resp.statusCode == 409) {
+        return {
+          'success': false,
+          'message': (body['error'] ?? 'Conflict (e.g., email already in use)').toString(),
+          'status': 409
+        };
+      }
+
+      return {
+        'success': false,
+        'message': (body['error'] ?? body['message'] ?? 'Failed to update applicant').toString(),
+        'status': resp.statusCode
+      };
+    } on SocketException {
+      return {'success': false, 'message': 'No internet connection'};
+    } on TimeoutException {
+      return {'success': false, 'message': 'Request timed out'};
+    } catch (e) {
+      return {'success': false, 'message': 'Unexpected error: $e'};
+    }
+  }
 }

@@ -194,6 +194,11 @@ class _ProfilePageState extends State<ProfilePage> {
             icon: const Icon(Icons.refresh),
             tooltip: 'Refresh',
           ),
+          IconButton(
+            onPressed: isLoading || applicant == null ? null : _openEditProfile,
+            icon: const Icon(Icons.edit),
+            tooltip: 'Edit Profile',
+          ),
         ],
       ),
       body: isLoading
@@ -398,6 +403,170 @@ class _ProfilePageState extends State<ProfilePage> {
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
       ),
+    );
+  }
+
+  Future<void> _openEditProfile() async {
+    final data = applicant ?? <String, dynamic>{};
+    final nameCtrl = TextEditingController(text: (data['full_name'] ?? '').toString());
+    final uniCtrl = TextEditingController(text: (data['university_name'] ?? '').toString());
+    final majorCtrl = TextEditingController(text: (data['major'] ?? '').toString());
+    final phoneCtrl = TextEditingController(text: (data['phone_number'] ?? '').toString());
+    final emailCtrl = TextEditingController(text: (data['student_email'] ?? '').toString());
+
+    bool saving = false;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setModalState) {
+            Future<void> submit() async {
+              if (saving) return;
+              // Compute only changed fields
+              final current = applicant ?? {};
+              String trimOrEmpty(String s) => s.trim();
+              final nextFullName = trimOrEmpty(nameCtrl.text);
+              final nextUni = trimOrEmpty(uniCtrl.text);
+              final nextMajor = trimOrEmpty(majorCtrl.text);
+              final nextPhone = trimOrEmpty(phoneCtrl.text);
+              final nextEmail = trimOrEmpty(emailCtrl.text);
+
+              String getStr(dynamic v) => v?.toString() ?? '';
+              final origFullName = getStr(current['full_name']);
+              final origUni = getStr(current['university_name']);
+              final origMajor = getStr(current['major']);
+              final origPhone = getStr(current['phone_number']);
+              final origEmail = getStr(current['student_email']);
+
+              final fullName = nextFullName != origFullName ? nextFullName : null;
+              final universityName = nextUni != origUni ? nextUni : null;
+              final major = nextMajor != origMajor ? nextMajor : null;
+              final phoneNumber = nextPhone != origPhone ? nextPhone : null;
+              final studentEmail = nextEmail != origEmail ? nextEmail : null;
+
+              if (fullName == null &&
+                  universityName == null &&
+                  major == null &&
+                  phoneNumber == null &&
+                  studentEmail == null) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('No changes to update')),
+                  );
+                }
+                return;
+              }
+
+              setModalState(() => saving = true);
+              final res = await UploadService.updateApplicantInfo(
+                fullName: fullName,
+                universityName: universityName,
+                major: major,
+                phoneNumber: phoneNumber,
+                studentEmail: studentEmail,
+              );
+              setModalState(() => saving = false);
+
+              if (!mounted) return;
+              if (res['success'] == true) {
+                // Prefer server-returned applicant; otherwise merge locally
+                final updated = (res['applicant'] is Map<String, dynamic>)
+                    ? res['applicant'] as Map<String, dynamic>
+                    : {
+                        ...?applicant,
+                        if (fullName != null) 'full_name': fullName,
+                        if (universityName != null) 'university_name': universityName,
+                        if (major != null) 'major': major,
+                        if (phoneNumber != null) 'phone_number': phoneNumber,
+                        if (studentEmail != null) 'student_email': studentEmail,
+                      };
+                setState(() => applicant = updated);
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(res['message']?.toString() ?? 'Profile updated'), backgroundColor: Colors.green),
+                );
+                Navigator.of(ctx).pop();
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(res['message']?.toString() ?? 'Update failed'), backgroundColor: Colors.red),
+                );
+              }
+            }
+
+            final bottomInset = MediaQuery.of(ctx).viewInsets.bottom;
+            return Padding(
+              padding: EdgeInsets.only(bottom: bottomInset),
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.edit, color: Colors.indigo),
+                          const SizedBox(width: 8),
+                          const Text('Edit Profile', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                          const Spacer(),
+                          IconButton(
+                            icon: const Icon(Icons.close),
+                            onPressed: () => Navigator.of(ctx).pop(),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: nameCtrl,
+                        textInputAction: TextInputAction.next,
+                        decoration: const InputDecoration(labelText: 'Full Name', prefixIcon: Icon(Icons.person)),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: uniCtrl,
+                        textInputAction: TextInputAction.next,
+                        decoration: const InputDecoration(labelText: 'University', prefixIcon: Icon(Icons.school)),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: majorCtrl,
+                        textInputAction: TextInputAction.next,
+                        decoration: const InputDecoration(labelText: 'Major', prefixIcon: Icon(Icons.menu_book)),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: phoneCtrl,
+                        textInputAction: TextInputAction.next,
+                        keyboardType: TextInputType.phone,
+                        decoration: const InputDecoration(labelText: 'Phone', prefixIcon: Icon(Icons.phone)),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: emailCtrl,
+                        textInputAction: TextInputAction.done,
+                        keyboardType: TextInputType.emailAddress,
+                        decoration: const InputDecoration(labelText: 'Student Email', prefixIcon: Icon(Icons.email)),
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: saving ? null : submit,
+                          icon: Icon(saving ? Icons.hourglass_top : Icons.save),
+                          label: Text(saving ? 'Saving...' : 'Save Changes'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }
