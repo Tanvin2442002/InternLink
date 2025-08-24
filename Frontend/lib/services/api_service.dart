@@ -192,6 +192,106 @@ class ApiService {
     await prefs.remove('profile_data');
   }
 
+  static Future<Map<String, dynamic>> sendPasswordResetEmail(String email) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/auth/forgot-password'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: json.encode({'email': email}),
+      ).timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Password reset email sent successfully'
+        };
+      } else {
+        final data = json.decode(response.body);
+        return {
+          'success': false,
+          'message': data['error'] ?? data['message'] ?? 'Failed to send reset email'
+        };
+      }
+    } on SocketException {
+      return {
+        'success': false,
+        'message': 'No internet connection. Please check your network.'
+      };
+    } on HttpException {
+      return {
+        'success': false,
+        'message': 'Server error. Please try again later.'
+      };
+    } on FormatException {
+      return {
+        'success': false,
+        'message': 'Invalid response format from server.'
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Network error: $e'
+      };
+    }
+  }
+
+  static Future<Map<String, dynamic>> resetPassword({
+    required String token,
+    required String newPassword,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/auth/reset-password'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: json.encode({
+          'token': token,
+          'newPassword': newPassword,
+        }),
+      ).timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Password reset successfully'
+        };
+      } else {
+        final data = json.decode(response.body);
+        return {
+          'success': false,
+          'message': data['error'] ?? data['message'] ?? 'Failed to reset password'
+        };
+      }
+    } on SocketException {
+      return {
+        'success': false,
+        'message': 'No internet connection. Please check your network.'
+      };
+    } on HttpException {
+      return {
+        'success': false,
+        'message': 'Server error. Please try again later.'
+      };
+    } on FormatException {
+      return {
+        'success': false,
+        'message': 'Invalid response format from server.'
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Network error: $e'
+      };
+    }
+  }
+
   // ============================
   // JOBS API METHODS
   // ============================
