@@ -46,27 +46,27 @@ router.get("/alljobs/:applicant_id", async (req, res) => {
     }
 
     const applicantId = req.params.applicant_id;
-    console.log("applicant_id:", applicantId);
+    // console.log("applicant_id:", applicantId);
 
     let cvUrl = null;
     try {
       const cv = await sql`SELECT cv_url FROM applicants WHERE applicant_id = ${applicantId}`;
-      console.log("CV query result:", cv);
+      // console.log("CV query result:", cv);
       cvUrl = cv && cv.length > 0 ? cv[0].cv_url : null;
     } catch (err) {
-      console.error("[Jobs] CV fetch error:", err);
+      // console.error("[Jobs] CV fetch error:", err);
       // Continue without CV - will use local matching
     }
 
-    console.log("[Jobs] cvUrl:", cvUrl ? "(provided)" : "(none)");
+    // console.log("[Jobs] cvUrl:", cvUrl ? "(provided)" : "(none)");
 
     // Always try to use Gemini with CV if available
     const result = await matchJobs({ jobs: rows, cvUrl });
-    console.log("[Jobs] matchJobs result:", result);
+    // console.log("[Jobs] matchJobs result:", result);
     
     // Filter the original rows to only include matched jobs
     const matchedJobs = rows.filter(job => result.matches.includes(job.id));
-    console.log("[Jobs] Filtered matched jobs:", matchedJobs.length, "out of", rows.length);
+    // console.log("[Jobs] Filtered matched jobs:", matchedJobs.length, "out of", rows.length);
     
     return res.json({ 
       success: true, 
@@ -78,7 +78,7 @@ router.get("/alljobs/:applicant_id", async (req, res) => {
       matchedJobsCount: matchedJobs.length
     });
   } catch (error) {
-    console.error("[Jobs] /alljobs/:applicant_id error:", error);
+    // console.error("[Jobs] /alljobs/:applicant_id error:", error);
     return res.status(500).json({ error: "Failed to fetch jobs" });
   }
 });
@@ -96,12 +96,12 @@ router.get("/alljobs/:cvurl", async (req, res) => {
         .toLowerCase()
     );
 
-    console.log(
-      "[Jobs] useGemini query parsed as:",
-      useGemini,
-      "cvUrl:",
-      cvUrl ? "(provided)" : "(none)"
-    );
+    // console.log(
+    //   "[Jobs] useGemini query parsed as:",
+    //   useGemini,
+    //   "cvUrl:",
+    //   cvUrl ? "(provided)" : "(none)"
+    // );
 
     // Pass the flag to the matcher
     const result = await matchJobs({ jobs: rows, cvUrl, useGemini });

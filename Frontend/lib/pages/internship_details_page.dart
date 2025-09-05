@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'application_form_page.dart';
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart'; // <-- add this import
 
 class InternshipDetailsPage extends StatelessWidget {
@@ -10,7 +12,20 @@ class InternshipDetailsPage extends StatelessWidget {
     if (iso == null || iso.isEmpty) return 'N/A';
     try {
       final dt = DateTime.parse(iso).toLocal();
-      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec',
+      ];
       return '${months[dt.month - 1]} ${dt.day}, ${dt.year}';
     } catch (_) {
       return 'N/A';
@@ -19,20 +34,27 @@ class InternshipDetailsPage extends StatelessWidget {
 
   IconData _perkIcon(String key) {
     switch (key.toLowerCase()) {
-      case 'clock': return Icons.access_time;
-      case 'graduation-cap': return Icons.school;
-      case 'certificate': return Icons.verified;
-      case 'users': return Icons.group;
-      case 'trending-up': return Icons.trending_up;
-      case 'gift': return Icons.card_giftcard;
-      default: return Icons.star_border;
+      case 'clock':
+        return Icons.access_time;
+      case 'graduation-cap':
+        return Icons.school;
+      case 'certificate':
+        return Icons.verified;
+      case 'users':
+        return Icons.group;
+      case 'trending-up':
+        return Icons.trending_up;
+      case 'gift':
+        return Icons.card_giftcard;
+      default:
+        return Icons.star_border;
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final company = (job['company_name'] ?? 'Unknown Company').toString();
-    final title   = (job['title'] ?? 'Internship').toString();
+    final title = (job['title'] ?? 'Internship').toString();
     final logoUrl = (job['company_logo_url'] ?? '').toString();
 
     // chips (prefer tags; else fallback to location/duration/stipend)
@@ -40,14 +62,17 @@ class InternshipDetailsPage extends StatelessWidget {
         ? (job['tags'] as List).map((e) => e.toString()).toList()
         : <String>[];
 
-    final location = (job['location'] ?? job['employment_type'] ?? 'Remote').toString();
+    final location = (job['location'] ?? job['employment_type'] ?? 'Remote')
+        .toString();
     final duration = job['duration_months'] != null
         ? '${(job['duration_months'] is num ? (job['duration_months'] as num).toInt() : int.tryParse(job['duration_months'].toString()) ?? 0)} Months'
         : 'N/A';
     final stipend = (job['stipend'] ?? 'N/A').toString();
 
     final appliedCount = job['applied_count']?.toString() ?? '0';
-    final postedReadable = (job['extra_meta'] is Map && job['extra_meta']['posted_readable'] != null)
+    final postedReadable =
+        (job['extra_meta'] is Map &&
+            job['extra_meta']['posted_readable'] != null)
         ? job['extra_meta']['posted_readable'].toString()
         : null;
     final closingDate = _formatDate(job['closing_date']?.toString());
@@ -68,9 +93,13 @@ class InternshipDetailsPage extends StatelessWidget {
 
     final List<Map<String, dynamic>> perks = (job['perks'] is List)
         ? (job['perks'] as List)
-            .map((p) => (p is Map) ? p.map((k, v) => MapEntry(k.toString(), v)) : <String, dynamic>{})
-            .cast<Map<String, dynamic>>()
-            .toList()
+              .map(
+                (p) => (p is Map)
+                    ? p.map((k, v) => MapEntry(k.toString(), v))
+                    : <String, dynamic>{},
+              )
+              .cast<Map<String, dynamic>>()
+              .toList()
         : const [];
 
     return Scaffold(
@@ -94,20 +123,30 @@ class InternshipDetailsPage extends StatelessWidget {
                           width: 64,
                           height: 64,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) =>
-                              const Icon(Icons.business, color: Colors.grey, size: 28),
+                          errorBuilder: (_, __, ___) => const Icon(
+                            Icons.business,
+                            color: Colors.grey,
+                            size: 28,
+                          ),
                         )
-                      : const Icon(Icons.business, color: Colors.grey, size: 28),
+                      : const Icon(
+                          Icons.business,
+                          color: Colors.grey,
+                          size: 28,
+                        ),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children:  [
+                  children: [
                     Text(
                       title,
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
                       overflow: TextOverflow.ellipsis,
                       maxLines: 2,
                     ),
@@ -120,16 +159,23 @@ class InternshipDetailsPage extends StatelessWidget {
           const SizedBox(height: 12),
           Wrap(
             spacing: 8,
-            children: (tags.isNotEmpty ? tags : <String>[location, duration, stipend])
-                .map((t) => Chip(label: Text(t)))
-                .toList(),
+            children:
+                (tags.isNotEmpty ? tags : <String>[location, duration, stipend])
+                    .map((t) => Chip(label: Text(t)))
+                    .toList(),
           ),
           const SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              InfoIcon(icon: Icons.person_outline, label: '$appliedCount Applied'),
-              InfoIcon(icon: Icons.access_time, label: postedReadable ?? 'Recently'),
+              InfoIcon(
+                icon: Icons.person_outline,
+                label: '$appliedCount Applied',
+              ),
+              InfoIcon(
+                icon: Icons.access_time,
+                label: postedReadable ?? 'Recently',
+              ),
               InfoIcon(icon: Icons.calendar_today, label: closingDate),
             ],
           ),
@@ -143,13 +189,20 @@ class InternshipDetailsPage extends StatelessWidget {
           const SizedBox(height: 16),
           const SectionHeader("Role Overview"),
           BulletList(
-            roleOverview.isNotEmpty ? roleOverview : const ["Details not provided."],
+            roleOverview.isNotEmpty
+                ? roleOverview
+                : const ["Details not provided."],
           ),
           const SectionHeader("Required Skills"),
           Wrap(
             spacing: 8,
             children: skills.isEmpty
-                ? [Text('Not specified', style: TextStyle(color: Colors.grey[700]))]
+                ? [
+                    Text(
+                      'Not specified',
+                      style: TextStyle(color: Colors.grey[700]),
+                    ),
+                  ]
                 : skills.map((s) => Chip(label: Text(s))).toList(),
           ),
           const SectionHeader("Eligibility"),
@@ -163,11 +216,13 @@ class InternshipDetailsPage extends StatelessWidget {
             children: perks.isEmpty
                 ? const [Text('Not specified')]
                 : perks
-                    .map((p) => BenefitItem(
+                      .map(
+                        (p) => BenefitItem(
                           icon: _perkIcon((p['icon'] ?? '').toString()),
                           label: (p['name'] ?? '').toString(),
-                        ))
-                    .toList(),
+                        ),
+                      )
+                      .toList(),
           ),
           const SizedBox(height: 24),
           Row(
@@ -181,13 +236,40 @@ class InternshipDetailsPage extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  onPressed: () {
+                  onPressed: () async {
+                    // Fetch applicant info from SharedPreferences
+                    final prefs = await SharedPreferences.getInstance();
+                    Map<String, dynamic>? profile;
+                    try {
+                      final p = prefs.getString('profile_data');
+                      if (p != null)
+                        profile = Map<String, dynamic>.from(jsonDecode(p));
+                    } catch (_) {}
+
+                    final applicantId =
+                        profile?['applicant_id']?.toString() ?? '';
+                    final cvUrl = profile?['cv_url']?.toString() ?? '';
+
+                    if (applicantId.isEmpty || cvUrl.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Profile or CV not found. Please update your profile.',
+                          ),
+                        ),
+                      );
+                      return;
+                    }
+
                     Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (context) => ApplicationFormPage(
+                          jobId: job['id']?.toString() ?? '',
+                          applicantId: applicantId,
                           internshipTitle: title,
                           companyName: company,
+                          cvUrl: cvUrl,
                         ),
                       ),
                     );
@@ -211,7 +293,10 @@ class InternshipDetailsPage extends StatelessWidget {
                     const SnackBar(content: Text('Saving internship...')),
                   );
 
-                  final res = await ApiService.saveInternshipWithStoredApplicant(jobId: jobId);
+                  final res =
+                      await ApiService.saveInternshipWithStoredApplicant(
+                        jobId: jobId,
+                      );
 
                   messenger.hideCurrentSnackBar();
                   if (res['success'] == true) {
@@ -225,7 +310,8 @@ class InternshipDetailsPage extends StatelessWidget {
                     final code = res['code']?.toString();
                     final msg = code == 'ALREADY_SAVED'
                         ? 'This internship is already saved'
-                        : (res['message']?.toString() ?? 'Failed to save internship');
+                        : (res['message']?.toString() ??
+                              'Failed to save internship');
                     messenger.showSnackBar(
                       SnackBar(
                         content: Text(msg),

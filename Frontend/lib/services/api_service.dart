@@ -4,18 +4,22 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://192.168.68.107:5000'; // For Android emulator
+  static const String baseUrl = 'http://10.0.2.2:5000'; // For Android emulator
 
   static Future<bool> testConnection() async {
     try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/api/auth/signup'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-      ).timeout(const Duration(seconds: 5));
-      return response.statusCode == 405 || response.statusCode == 200 || response.statusCode == 404;
+      final response = await http
+          .get(
+            Uri.parse('$baseUrl/api/auth/signup'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+          )
+          .timeout(const Duration(seconds: 5));
+      return response.statusCode == 405 ||
+          response.statusCode == 200 ||
+          response.statusCode == 404;
     } catch (e) {
       return false;
     }
@@ -71,48 +75,47 @@ class ApiService {
         'profileData': profileData,
       };
 
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/auth/signup'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: json.encode(requestBody),
-      ).timeout(const Duration(seconds: 15));
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/api/auth/signup'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: json.encode(requestBody),
+          )
+          .timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 201 || response.statusCode == 200) {
         final data = json.decode(response.body);
         return {
           'success': true,
-          'message': data['message'] ?? 'Account created successfully'
+          'message': data['message'] ?? 'Account created successfully',
         };
       } else {
         final data = json.decode(response.body);
         return {
           'success': false,
-          'message': data['error'] ?? data['message'] ?? 'Signup failed'
+          'message': data['error'] ?? data['message'] ?? 'Signup failed',
         };
       }
     } on SocketException {
       return {
         'success': false,
-        'message': 'No internet connection. Please check your network.'
+        'message': 'No internet connection. Please check your network.',
       };
     } on HttpException {
       return {
         'success': false,
-        'message': 'Server error. Please try again later.'
+        'message': 'Server error. Please try again later.',
       };
     } on FormatException {
       return {
         'success': false,
-        'message': 'Invalid response format from server.'
+        'message': 'Invalid response format from server.',
       };
     } catch (e) {
-      return {
-        'success': false,
-        'message': 'Network error: $e'
-      };
+      return {'success': false, 'message': 'Network error: $e'};
     }
   }
 
@@ -121,19 +124,18 @@ class ApiService {
     required String password,
   }) async {
     try {
-      final requestBody = {
-        'email': email,
-        'password': password,
-      };
+      final requestBody = {'email': email, 'password': password};
 
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/auth/login'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: json.encode(requestBody),
-      ).timeout(const Duration(seconds: 15));
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/api/auth/login'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: json.encode(requestBody),
+          )
+          .timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -153,35 +155,32 @@ class ApiService {
           'success': true,
           'user': data['user'],
           'profile': data['profile'],
-          'message': data['message'] ?? 'Login successful'
+          'message': data['message'] ?? 'Login successful',
         };
       } else {
         final data = json.decode(response.body);
         return {
           'success': false,
-          'message': data['error'] ?? data['message'] ?? 'Login failed'
+          'message': data['error'] ?? data['message'] ?? 'Login failed',
         };
       }
     } on SocketException {
       return {
         'success': false,
-        'message': 'No internet connection. Please check your network.'
+        'message': 'No internet connection. Please check your network.',
       };
     } on HttpException {
       return {
         'success': false,
-        'message': 'Server error. Please try again later.'
+        'message': 'Server error. Please try again later.',
       };
     } on FormatException {
       return {
         'success': false,
-        'message': 'Invalid response format from server.'
+        'message': 'Invalid response format from server.',
       };
     } catch (e) {
-      return {
-        'success': false,
-        'message': 'Network error: $e'
-      };
+      return {'success': false, 'message': 'Network error: $e'};
     }
   }
 
@@ -192,50 +191,53 @@ class ApiService {
     await prefs.remove('profile_data');
   }
 
-  static Future<Map<String, dynamic>> sendPasswordResetEmail(String email) async {
+  static Future<Map<String, dynamic>> sendPasswordResetEmail(
+    String email,
+  ) async {
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/auth/forgot-password'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: json.encode({'email': email}),
-      ).timeout(const Duration(seconds: 15));
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/api/auth/forgot-password'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: json.encode({'email': email}),
+          )
+          .timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         return {
           'success': true,
-          'message': data['message'] ?? 'Password reset email sent successfully'
+          'message':
+              data['message'] ?? 'Password reset email sent successfully',
         };
       } else {
         final data = json.decode(response.body);
         return {
           'success': false,
-          'message': data['error'] ?? data['message'] ?? 'Failed to send reset email'
+          'message':
+              data['error'] ?? data['message'] ?? 'Failed to send reset email',
         };
       }
     } on SocketException {
       return {
         'success': false,
-        'message': 'No internet connection. Please check your network.'
+        'message': 'No internet connection. Please check your network.',
       };
     } on HttpException {
       return {
         'success': false,
-        'message': 'Server error. Please try again later.'
+        'message': 'Server error. Please try again later.',
       };
     } on FormatException {
       return {
         'success': false,
-        'message': 'Invalid response format from server.'
+        'message': 'Invalid response format from server.',
       };
     } catch (e) {
-      return {
-        'success': false,
-        'message': 'Network error: $e'
-      };
+      return {'success': false, 'message': 'Network error: $e'};
     }
   }
 
@@ -244,51 +246,48 @@ class ApiService {
     required String newPassword,
   }) async {
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/auth/reset-password'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: json.encode({
-          'token': token,
-          'newPassword': newPassword,
-        }),
-      ).timeout(const Duration(seconds: 15));
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/api/auth/reset-password'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: json.encode({'token': token, 'newPassword': newPassword}),
+          )
+          .timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         return {
           'success': true,
-          'message': data['message'] ?? 'Password reset successfully'
+          'message': data['message'] ?? 'Password reset successfully',
         };
       } else {
         final data = json.decode(response.body);
         return {
           'success': false,
-          'message': data['error'] ?? data['message'] ?? 'Failed to reset password'
+          'message':
+              data['error'] ?? data['message'] ?? 'Failed to reset password',
         };
       }
     } on SocketException {
       return {
         'success': false,
-        'message': 'No internet connection. Please check your network.'
+        'message': 'No internet connection. Please check your network.',
       };
     } on HttpException {
       return {
         'success': false,
-        'message': 'Server error. Please try again later.'
+        'message': 'Server error. Please try again later.',
       };
     } on FormatException {
       return {
         'success': false,
-        'message': 'Invalid response format from server.'
+        'message': 'Invalid response format from server.',
       };
     } catch (e) {
-      return {
-        'success': false,
-        'message': 'Network error: $e'
-      };
+      return {'success': false, 'message': 'Network error: $e'};
     }
   }
 
@@ -298,13 +297,15 @@ class ApiService {
 
   static Future<Map<String, dynamic>> getJobById(String jobId) async {
     try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/api/jobs/$jobId'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-      ).timeout(const Duration(seconds: 10));
+      final response = await http
+          .get(
+            Uri.parse('$baseUrl/api/jobs/$jobId'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+          )
+          .timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -312,46 +313,40 @@ class ApiService {
           return {
             'success': true,
             'job': data['job'],
-            'message': 'Job details fetched successfully'
+            'message': 'Job details fetched successfully',
           };
         } else {
           return {
             'success': false,
-            'message': data['error'] ?? 'Failed to fetch job details'
+            'message': data['error'] ?? 'Failed to fetch job details',
           };
         }
       } else if (response.statusCode == 404) {
-        return {
-          'success': false,
-          'message': 'Job not found'
-        };
+        return {'success': false, 'message': 'Job not found'};
       } else {
         final data = json.decode(response.body);
         return {
           'success': false,
-          'message': data['error'] ?? 'Failed to fetch job details'
+          'message': data['error'] ?? 'Failed to fetch job details',
         };
       }
     } on SocketException {
       return {
         'success': false,
-        'message': 'No internet connection. Please check your network.'
+        'message': 'No internet connection. Please check your network.',
       };
     } on HttpException {
       return {
         'success': false,
-        'message': 'Server error. Please try again later.'
+        'message': 'Server error. Please try again later.',
       };
     } on FormatException {
       return {
         'success': false,
-        'message': 'Invalid response format from server.'
+        'message': 'Invalid response format from server.',
       };
     } catch (e) {
-      return {
-        'success': false,
-        'message': 'Network error: $e'
-      };
+      return {'success': false, 'message': 'Network error: $e'};
     }
   }
 
@@ -368,13 +363,15 @@ class ApiService {
         url = '$baseUrl/api/alljobs/null'; // This will hit the cvurl route
       }
 
-      final response = await http.get(
-        Uri.parse(url),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-      ).timeout(const Duration(seconds: 15));
+      final response = await http
+          .get(
+            Uri.parse(url),
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+          )
+          .timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -392,7 +389,7 @@ class ApiService {
         } else {
           return {
             'success': false,
-            'message': data['error'] ?? 'Failed to fetch jobs'
+            'message': data['error'] ?? 'Failed to fetch jobs',
           };
         }
       } else if (response.statusCode == 404) {
@@ -400,35 +397,32 @@ class ApiService {
           'success': false,
           'message': 'No jobs found',
           'jobs': [],
-          'count': 0
+          'count': 0,
         };
       } else {
         final data = json.decode(response.body);
         return {
           'success': false,
-          'message': data['error'] ?? 'Failed to fetch jobs'
+          'message': data['error'] ?? 'Failed to fetch jobs',
         };
       }
     } on SocketException {
       return {
         'success': false,
-        'message': 'No internet connection. Please check your network.'
+        'message': 'No internet connection. Please check your network.',
       };
     } on HttpException {
       return {
         'success': false,
-        'message': 'Server error. Please try again later.'
+        'message': 'Server error. Please try again later.',
       };
     } on FormatException {
       return {
         'success': false,
-        'message': 'Invalid response format from server.'
+        'message': 'Invalid response format from server.',
       };
     } catch (e) {
-      return {
-        'success': false,
-        'message': 'Network error: $e'
-      };
+      return {'success': false, 'message': 'Network error: $e'};
     }
   }
 
@@ -445,15 +439,20 @@ class ApiService {
       if (u != null) user = json.decode(u);
     } catch (_) {}
 
-    final applicantId = (profile?['applicant_id'] ??
-        profile?['id'] ??
-        user?['applicant_id'] ??
-        user?['user_id'] ??
-        user?['id'])?.toString();
+    final applicantId =
+        (profile?['applicant_id'] ??
+                profile?['id'] ??
+                user?['applicant_id'] ??
+                user?['user_id'] ??
+                user?['id'])
+            ?.toString();
 
     if (applicantId == null || applicantId.isEmpty) {
-      return {'success': false, 'message': 'Applicant ID not found. Please log in again.'};
-    } 
+      return {
+        'success': false,
+        'message': 'Applicant ID not found. Please log in again.',
+      };
+    }
     print("Using applicant_id: $applicantId to fetch jobs");
     return getAllJobs(applicantId: applicantId);
   }
@@ -472,16 +471,21 @@ class ApiService {
       if (u != null) user = json.decode(u);
     } catch (_) {}
 
-    final applicantId = (profile?['applicant_id'] ??
-        profile?['id'] ??
-        user?['applicant_id'] ??
-        user?['user_id'] ??
-        user?['id'])?.toString();
+    final applicantId =
+        (profile?['applicant_id'] ??
+                profile?['id'] ??
+                user?['applicant_id'] ??
+                user?['user_id'] ??
+                user?['id'])
+            ?.toString();
 
     if (applicantId == null || applicantId.isEmpty) {
-      return {'success': false, 'message': 'Applicant ID not found. Please log in again.'};
+      return {
+        'success': false,
+        'message': 'Applicant ID not found. Please log in again.',
+      };
     }
-    
+
     return saveInternship(applicantId: applicantId, jobId: jobId);
   }
 
@@ -499,12 +503,10 @@ class ApiService {
             headers: {
               'Content-Type': 'application/json',
               'Accept': 'application/json',
-              if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+              if (token != null && token.isNotEmpty)
+                'Authorization': 'Bearer $token',
             },
-            body: json.encode({
-              'applicant_id': applicantId,
-              'job_id': jobId,
-            }),
+            body: json.encode({'applicant_id': applicantId, 'job_id': jobId}),
           )
           .timeout(const Duration(seconds: 12));
 
@@ -543,7 +545,9 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>> getSavedInternships(String applicantId) async {
+  static Future<Map<String, dynamic>> getSavedInternships(
+    String applicantId,
+  ) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('auth_token');
@@ -556,20 +560,30 @@ class ApiService {
 
       // Attempt 1: path param
       final url1 = Uri.parse('$baseUrl/api/saved-internships/$applicantId');
-      final resp1 = await http.get(url1, headers: headers).timeout(const Duration(seconds: 12));
+      final resp1 = await http
+          .get(url1, headers: headers)
+          .timeout(const Duration(seconds: 12));
 
       http.Response useResp = resp1;
 
       // Fallback 2: snake_case query
       if (useResp.statusCode == 400 || useResp.statusCode == 404) {
-        final url2 = Uri.parse('$baseUrl/api/saved-internships?applicant_id=$applicantId');
-        final resp2 = await http.get(url2, headers: headers).timeout(const Duration(seconds: 12));
+        final url2 = Uri.parse(
+          '$baseUrl/api/saved-internships?applicant_id=$applicantId',
+        );
+        final resp2 = await http
+            .get(url2, headers: headers)
+            .timeout(const Duration(seconds: 12));
         if (resp2.statusCode != 404) useResp = resp2;
 
         // Fallback 3: camelCase query
         if (useResp.statusCode == 400 || useResp.statusCode == 404) {
-          final url3 = Uri.parse('$baseUrl/api/saved-internships?applicantId=$applicantId');
-          final resp3 = await http.get(url3, headers: headers).timeout(const Duration(seconds: 12));
+          final url3 = Uri.parse(
+            '$baseUrl/api/saved-internships?applicantId=$applicantId',
+          );
+          final resp3 = await http
+              .get(url3, headers: headers)
+              .timeout(const Duration(seconds: 12));
           useResp = resp3;
         }
       }
@@ -588,7 +602,9 @@ class ApiService {
           items = data['data'];
         }
 
-        final needsExpand = items.any((e) => e is Map && e['job'] == null && e['job_id'] != null);
+        final needsExpand = items.any(
+          (e) => e is Map && e['job'] == null && e['job_id'] != null,
+        );
         if (needsExpand) {
           final expanded = <Map<String, dynamic>>[];
           for (final it in items) {
@@ -614,7 +630,10 @@ class ApiService {
       }
 
       final err = useResp.body.isNotEmpty ? json.decode(useResp.body) : {};
-      return {'success': false, 'message': err['error'] ?? 'Failed to fetch saved internships'};
+      return {
+        'success': false,
+        'message': err['error'] ?? 'Failed to fetch saved internships',
+      };
     } on SocketException {
       return {'success': false, 'message': 'No internet connection'};
     } on HttpException {
@@ -626,7 +645,8 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>> getSavedInternshipsWithStoredApplicant() async {
+  static Future<Map<String, dynamic>>
+  getSavedInternshipsWithStoredApplicant() async {
     final prefs = await SharedPreferences.getInstance();
     Map<String, dynamic>? profile;
     Map<String, dynamic>? user;
@@ -638,16 +658,129 @@ class ApiService {
       if (u != null) user = json.decode(u);
     } catch (_) {}
 
-    final applicantId = (profile?['applicant_id'] ??
-        profile?['id'] ??
-        user?['applicant_id'] ??
-        user?['user_id'] ??
-        user?['id'])?.toString();
+    final applicantId =
+        (profile?['applicant_id'] ??
+                profile?['id'] ??
+                user?['applicant_id'] ??
+                user?['user_id'] ??
+                user?['id'])
+            ?.toString();
 
     if (applicantId == null || applicantId.isEmpty) {
-      return {'success': false, 'message': 'Applicant ID not found. Please log in again.'};
+      return {
+        'success': false,
+        'message': 'Applicant ID not found. Please log in again.',
+      };
     }
 
     return getSavedInternships(applicantId);
+  }
+
+  static Future<Map<String, dynamic>> submitApplication(
+    Map<String, dynamic> payload,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('auth_token');
+
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
+
+      final url = '$baseUrl/api/applications';
+      final response = await http
+          .post(Uri.parse(url), headers: headers, body: json.encode(payload))
+          .timeout(const Duration(seconds: 15));
+
+      final data = json.decode(response.body);
+      if (response.statusCode == 201 && data['success'] == true) {
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Application submitted successfully',
+          'application': data['application'],
+        };
+      } else {
+        return {
+          'success': false,
+          'error':
+              data['error'] ??
+              data['message'] ??
+              'Failed to submit application',
+          'status': response.statusCode,
+        };
+      }
+    } on SocketException {
+      return {'success': false, 'message': 'No internet connection'};
+    } on HttpException {
+      return {'success': false, 'message': 'Server error'};
+    } on FormatException {
+      return {'success': false, 'message': 'Invalid server response'};
+    } catch (e) {
+      return {'success': false, 'message': 'Network error: $e'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> getApplications(
+    String applicantId,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('auth_token');
+
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
+
+      final url = '$baseUrl/api/applications/$applicantId';
+      final response = await http
+          .get(Uri.parse(url), headers: headers)
+          .timeout(const Duration(seconds: 15));
+
+      final data = json.decode(response.body);
+      return data;
+    } on SocketException {
+      return {'success': false, 'message': 'No internet connection'};
+    } on HttpException {
+      return {'success': false, 'message': 'Server error'};
+    } on FormatException {
+      return {'success': false, 'message': 'Invalid server response'};
+    } catch (e) {
+      return {'success': false, 'message': 'Network error: $e'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> getApplicationStats(
+    String applicantId,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('auth_token');
+
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
+
+      final url = '$baseUrl/api/applications/$applicantId/stats';
+      final response = await http
+          .get(Uri.parse(url), headers: headers)
+          .timeout(const Duration(seconds: 10));
+
+      final data = json.decode(response.body);
+      return data;
+    } on SocketException {
+      return {'success': false, 'message': 'No internet connection'};
+    } on HttpException {
+      return {'success': false, 'message': 'Server error'};
+    } on FormatException {
+      return {'success': false, 'message': 'Invalid server response'};
+    } catch (e) {
+      return {'success': false, 'message': 'Network error: $e'};
+    }
   }
 }

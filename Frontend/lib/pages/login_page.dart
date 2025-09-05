@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'main_nav_page.dart';
 import 'recruiter_main_nav_page.dart';
+import 'reset_password_page.dart';
 import '../services/api_service.dart';
 
 class LoginPage extends StatefulWidget {
@@ -324,7 +325,7 @@ class _LoginPageState extends State<LoginPage> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => const ForgotPasswordPage(),
+                           builder: (context) => ResetPasswordPage(token: ''),
                           ),
                         );
                       },

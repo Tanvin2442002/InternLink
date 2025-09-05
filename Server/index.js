@@ -4,6 +4,7 @@ const cors = require('cors');
 const authRoutes = require('./Routes/Authentication');
 const jobRoutes = require('./Routes/Jobs');
 const profileRoutes = require('./Routes/Profile');
+const applicationRoutes = require('./Routes/Application');
 
 const app = express();
 app.use(cors());
@@ -13,6 +14,7 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api', jobRoutes);
 app.use('/api', profileRoutes);
+app.use('/api', applicationRoutes);
 
 const PORT = process.env.PORT || 4000;
 app.listen(5000, '0.0.0.0', () => {

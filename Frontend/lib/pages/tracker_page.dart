@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
+import '../services/api_service.dart';
 
 class Application {
   final String title;
@@ -14,6 +17,8 @@ class Application {
   final String description;
   final List<String> requirements;
   final int daysAgo;
+  final String jobId;
+  final DateTime submittedAt;
 
   Application({
     required this.title,
@@ -29,7 +34,72 @@ class Application {
     required this.description,
     required this.requirements,
     required this.daysAgo,
+    required this.jobId,
+    required this.submittedAt,
   });
+
+  // Factory method to create Application from API response
+  factory Application.fromApi(Map<String, dynamic> data) {
+    // Parse requirements from JSON array or comma-separated string
+    List<String> requirements = [];
+    if (data['requirements'] != null) {
+      if (data['requirements'] is List) {
+        requirements = List<String>.from(data['requirements']);
+      } else if (data['requirements'] is String) {
+        try {
+          final parsed = jsonDecode(data['requirements']);
+          if (parsed is List) {
+            requirements = List<String>.from(parsed);
+          }
+        } catch (_) {
+          requirements = data['requirements'].toString().split(',').map((e) => e.trim()).toList();
+        }
+      }
+    }
+
+    // Status color mapping
+    Color getStatusColor(String status) {
+      switch (status.toLowerCase()) {
+        case 'pending':
+        case 'applied':
+          return Colors.grey;
+        case 'under review':
+        case 'reviewing':
+          return Colors.blue;
+        case 'interview scheduled':
+        case 'phone interview':
+        case 'technical interview':
+          return Colors.orange;
+        case 'selected':
+        case 'hired':
+        case 'accepted':
+          return Colors.green;
+        case 'rejected':
+        case 'declined':
+          return Colors.red;
+        default:
+          return Colors.purple;
+      }
+    }
+
+    return Application(
+      title: data['title']?.toString() ?? 'Unknown Position',
+      company: data['company']?.toString() ?? 'Unknown Company',
+      logo: data['logo']?.toString() ?? '',
+      date: data['date']?.toString() ?? '',
+      status: data['status']?.toString() ?? 'pending',
+      color: getStatusColor(data['status']?.toString() ?? 'pending'),
+      applicationId: data['applicationid']?.toString() ?? '',
+      position: data['position']?.toString() ?? 'Internship',
+      salary: data['salary']?.toString() ?? 'Not specified',
+      location: data['location']?.toString() ?? 'Not specified',
+      description: data['description']?.toString() ?? 'No description available',
+      requirements: requirements,
+      daysAgo: data['daysago']?.toInt() ?? 0,
+      jobId: data['jobid']?.toString() ?? '',
+      submittedAt: DateTime.tryParse(data['submittedat']?.toString() ?? '') ?? DateTime.now(),
+    );
+  }
 }
 
 class ApplicationTrackerPage extends StatefulWidget {
@@ -42,158 +112,78 @@ class ApplicationTrackerPage extends StatefulWidget {
 class _ApplicationTrackerPageState extends State<ApplicationTrackerPage> {
   String searchQuery = '';
   String selectedFilter = 'All';
+  List<Application> applications = [];
+  bool isLoading = true;
+  String? errorMessage;
+
   final List<String> filterOptions = [
     'All',
-    'Under Review',
-    'Interview Scheduled',
-    'Rejected',
-    'Phone Interview',
-    'Technical Interview',
-    'Applied',
+    'pending',
+    'under review', 
+    'interview scheduled',
+    'selected',
+    'rejected',
+    'phone interview',
+    'technical interview',
+    'applied',
   ];
 
-  static final List<Application> applications = [
-    Application(
-      title: "Software Engineering Intern",
-      company: "Google",
-      logo: "https://logo.clearbit.com/google.com",
-      date: "Dec 15, 2023",
-      status: "Under Review",
-      color: Colors.blue,
-      applicationId: "APP001",
-      position: "SWE Intern",
-      salary: "\$85,000/year",
-      location: "Mountain View, CA",
-      description:
-          "Join Google's world-class engineering team to build products that help billions of users connect, explore, and interact with information.",
-      requirements: [
-        "Computer Science degree",
-        "Python/Java proficiency",
-        "Data structures knowledge",
-      ],
-      daysAgo: 45,
-    ),
-    Application(
-      title: "Product Design Intern",
-      company: "Apple",
-      logo: "https://logo.clearbit.com/apple.com",
-      date: "Dec 12, 2023",
-      status: "Interview Scheduled",
-      color: Colors.purple,
-      applicationId: "APP002",
-      position: "Design Intern",
-      salary: "\$75,000/year",
-      location: "Cupertino, CA",
-      description:
-          "Create intuitive and beautiful user experiences for Apple's next generation of products used by millions worldwide.",
-      requirements: [
-        "Design portfolio",
-        "Figma/Sketch proficiency",
-        "User-centered design principles",
-      ],
-      daysAgo: 48,
-    ),
-    Application(
-      title: "UX Research Intern",
-      company: "Microsoft",
-      logo: "https://logo.clearbit.com/microsoft.com",
-      date: "Dec 10, 2023",
-      status: "Selected",
-      color: Colors.green,
-      applicationId: "APP003",
-      position: "UX Research Intern",
-      salary: "\$70,000/year",
-      location: "Redmond, WA",
-      description:
-          "Conduct user research to inform product decisions and improve user experiences across Microsoft's ecosystem of products.",
-      requirements: [
-        "Research methodology",
-        "Data analysis",
-        "Communication skills",
-      ],
-      daysAgo: 50,
-    ),
-    Application(
-      title: "Frontend Developer Intern",
-      company: "Meta",
-      logo: "https://logo.clearbit.com/meta.com",
-      date: "Dec 8, 2023",
-      status: "Applied",
-      color: Colors.grey,
-      applicationId: "APP004",
-      position: "Frontend Intern",
-      salary: "\$80,000/year",
-      location: "Menlo Park, CA",
-      description:
-          "Build responsive and scalable web applications that connect people around the world through Meta's family of apps.",
-      requirements: ["React/JavaScript", "HTML/CSS", "Version control (Git)"],
-      daysAgo: 52,
-    ),
-    Application(
-      title: "Data Science Intern",
-      company: "Amazon",
-      logo: "https://logo.clearbit.com/amazon.com",
-      date: "Dec 5, 2023",
-      status: "Rejected",
-      color: Colors.red,
-      applicationId: "APP005",
-      position: "Data Science Intern",
-      salary: "\$90,000/year",
-      location: "Seattle, WA",
-      description:
-          "Apply machine learning and statistical analysis to solve complex business problems and improve customer experiences.",
-      requirements: ["Python/R", "Machine learning", "Statistics background"],
-      daysAgo: 55,
-    ),
-    Application(
-      title: "Mobile App Developer Intern",
-      company: "Netflix",
-      logo: "https://logo.clearbit.com/netflix.com",
-      date: "Dec 3, 2023",
-      status: "Phone Interview",
-      color: Colors.orange,
-      applicationId: "APP006",
-      position: "Mobile Dev Intern",
-      salary: "\$78,000/year",
-      location: "Los Gatos, CA",
-      description:
-          "Develop innovative mobile experiences that help millions of users discover and enjoy entertainment content.",
-      requirements: ["iOS/Android development", "Swift/Kotlin", "Mobile UI/UX"],
-      daysAgo: 57,
-    ),
-    Application(
-      title: "Backend Engineer Intern",
-      company: "Spotify",
-      logo: "https://logo.clearbit.com/spotify.com",
-      date: "Nov 28, 2023",
-      status: "Technical Interview",
-      color: Colors.purple,
-      applicationId: "APP007",
-      position: "Backend Intern",
-      salary: "\$82,000/year",
-      location: "New York, NY",
-      description:
-          "Build scalable backend systems that power music streaming for over 400 million users worldwide.",
-      requirements: ["Java/Python", "Distributed systems", "Database design"],
-      daysAgo: 62,
-    ),
-    Application(
-      title: "Cloud Infrastructure Intern",
-      company: "Tesla",
-      logo: "https://logo.clearbit.com/tesla.com",
-      date: "Nov 25, 2023",
-      status: "Applied",
-      color: Colors.grey,
-      applicationId: "APP008",
-      position: "Cloud Intern",
-      salary: "\$88,000/year",
-      location: "Austin, TX",
-      description:
-          "Help build and maintain the cloud infrastructure that powers Tesla's autonomous vehicles and energy products.",
-      requirements: ["AWS/Azure", "DevOps practices", "Linux systems"],
-      daysAgo: 65,
-    ),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _fetchApplications();
+  }
+
+  Future<void> _fetchApplications() async {
+    setState(() {
+      isLoading = true;
+      errorMessage = null;
+    });
+
+    try {
+      // Get applicant_id from SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      Map<String, dynamic>? profile;
+      try {
+        final p = prefs.getString('profile_data');
+        if (p != null) profile = jsonDecode(p);
+      } catch (_) {}
+
+      final applicantId = profile?['applicant_id']?.toString();
+      if (applicantId == null || applicantId.isEmpty) {
+        setState(() {
+          errorMessage = 'Applicant ID not found. Please log in again.';
+          isLoading = false;
+        });
+        return;
+      }
+
+      // Call the API
+      final result = await ApiService.getApplications(applicantId);
+      
+      if (result['success'] == true && result['applications'] != null) {
+        final List<dynamic> apiApplications = result['applications'];
+        setState(() {
+          applications = apiApplications
+              .map((app) => Application.fromApi(app as Map<String, dynamic>))
+              .toList();
+          isLoading = false;
+        });
+      } else {
+        setState(() {
+          errorMessage = result['message'] ?? 'Failed to fetch applications';
+          isLoading = false;
+          applications = [];
+        });
+      }
+    } catch (e) {
+      setState(() {
+        errorMessage = 'Network error: $e';
+        isLoading = false;
+        applications = [];
+      });
+    }
+  }
 
   List<Application> get filteredApplications {
     List<Application> filtered = applications;
@@ -210,7 +200,7 @@ class _ApplicationTrackerPageState extends State<ApplicationTrackerPage> {
     }
 
     if (selectedFilter != 'All') {
-      filtered = filtered.where((app) => app.status == selectedFilter).toList();
+      filtered = filtered.where((app) => app.status.toLowerCase() == selectedFilter.toLowerCase()).toList();
     }
 
     return filtered;
@@ -477,334 +467,6 @@ class _ApplicationTrackerPageState extends State<ApplicationTrackerPage> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: CustomScrollView(
-        slivers: [
-          SliverAppBar(
-            expandedHeight: 200,
-            floating: false,
-            pinned: true,
-            backgroundColor: Colors.transparent,
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [Color(0xFF667eea), Color(0xFF764ba2)],
-                  ),
-                ),
-                child: SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Spacer(),
-                        const Text(
-                          'Application Tracker',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          '${filteredApplications.length} applications',
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 16,
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        // Search bar
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.9),
-                            borderRadius: BorderRadius.circular(25),
-                          ),
-                          child: TextField(
-                            onChanged: (value) {
-                              setState(() {
-                                searchQuery = value;
-                              });
-                            },
-                            decoration: const InputDecoration(
-                              hintText: 'Search applications...',
-                              prefixIcon: Icon(
-                                Icons.search,
-                                color: Colors.grey,
-                              ),
-                              border: InputBorder.none,
-                              contentPadding: EdgeInsets.symmetric(
-                                horizontal: 20,
-                                vertical: 15,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-
-          // Filter chips
-          SliverToBoxAdapter(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: filterOptions.map((filter) {
-                    final isSelected = selectedFilter == filter;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 12),
-                      child: FilterChip(
-                        label: Text(filter),
-                        selected: isSelected,
-                        onSelected: (selected) {
-                          setState(() {
-                            selectedFilter = filter;
-                          });
-                        },
-                        backgroundColor: Colors.grey[100],
-                        selectedColor: const Color(0xFF667eea).withOpacity(0.2),
-                        checkmarkColor: const Color(0xFF667eea),
-                        labelStyle: TextStyle(
-                          color: isSelected
-                              ? const Color(0xFF667eea)
-                              : Colors.grey[700],
-                          fontWeight: isSelected
-                              ? FontWeight.w600
-                              : FontWeight.normal,
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
-            ),
-          ),
-
-          // Applications list
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            sliver: SliverList(
-              delegate: SliverChildBuilderDelegate((context, index) {
-                final app = filteredApplications[index];
-                return GestureDetector(
-                  onTap: () => _showApplicationDetails(app),
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.08),
-                          blurRadius: 15,
-                          offset: const Offset(0, 5),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Logo with hero animation
-                            Hero(
-                              tag: 'logo_${app.applicationId}',
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
-                                child: Image.network(
-                                  app.logo,
-                                  height: 60,
-                                  width: 60,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return Container(
-                                      height: 60,
-                                      width: 60,
-                                      decoration: BoxDecoration(
-                                        color: Colors.grey[300],
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: const Icon(
-                                        Icons.business,
-                                        color: Colors.grey,
-                                        size: 30,
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            // Details
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    app.title,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16, // Reduced from 18
-                                    ),
-                                    maxLines:
-                                        2, // Allow 2 lines for long titles
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    app.company,
-                                    style: TextStyle(
-                                      color: Colors.grey[600],
-                                      fontSize: 14, // Reduced from 16
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        Icons.location_on,
-                                        size: 14,
-                                        color: Colors.grey[500],
-                                      ), // Reduced icon size
-                                      const SizedBox(width: 4),
-                                      Expanded(
-                                        // Make location expandable
-                                        child: Text(
-                                          app.location,
-                                          style: TextStyle(
-                                            color: Colors.grey[600],
-                                            fontSize: 12,
-                                          ), // Reduced font size
-                                          overflow: TextOverflow.ellipsis,
-                                          maxLines: 1,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                            // Status pill
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color: app.color.withOpacity(0.15),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Text(
-                                app.status,
-                                style: TextStyle(
-                                  color: app.color,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-
-                        const SizedBox(height: 16),
-
-                        // Quick info row
-                        Row(
-                          children: [
-                            Expanded(
-                              flex: 3,
-                              child: _buildQuickInfo(
-                                Icons.attach_money,
-                                app.salary,
-                                Colors.green,
-                              ),
-                            ),
-                            Expanded(
-                              flex: 2,
-                              child: _buildQuickInfo(
-                                Icons.access_time,
-                                '${app.daysAgo}d ago',
-                                Colors.orange,
-                              ),
-                            ),
-                            Expanded(
-                              flex: 2,
-                              child: _buildQuickInfo(
-                                Icons.badge,
-                                app.applicationId,
-                                Colors.purple,
-                              ),
-                            ),
-                          ],
-                        ),
-
-                        const SizedBox(height: 12),
-
-                        // Description preview
-                        Text(
-                          app.description,
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontSize: 14,
-                            height: 1.4,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-
-                        const SizedBox(height: 12),
-
-                        // Tap to view more
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            Text(
-                              'Tap to view details',
-                              style: TextStyle(
-                                color: const Color(0xFF667eea),
-                                fontSize: 11,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            Icon(
-                              Icons.arrow_forward_ios,
-                              size: 10,
-                              color: const Color(0xFF667eea),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }, childCount: filteredApplications.length),
-            ),
-          ),
-
-          // Bottom padding
-          const SliverToBoxAdapter(child: SizedBox(height: 100)),
-        ],
-      ),
-    );
-  }
-
   Widget _buildQuickInfo(IconData icon, String text, Color color) {
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -824,6 +486,396 @@ class _ApplicationTrackerPageState extends State<ApplicationTrackerPage> {
           ),
         ),
       ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: RefreshIndicator(
+        onRefresh: _fetchApplications,
+        child: CustomScrollView(
+          slivers: [
+            SliverAppBar(
+              expandedHeight: 200,
+              floating: false,
+              pinned: true,
+              backgroundColor: Colors.transparent,
+              flexibleSpace: FlexibleSpaceBar(
+                background: Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFF667eea), Color(0xFF764ba2)],
+                    ),
+                  ),
+                  child: SafeArea(
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Spacer(),
+                          const Text(
+                            'Application Tracker',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            isLoading 
+                                ? 'Loading applications...'
+                                : '${filteredApplications.length} applications',
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 16,
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          // Search bar
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.9),
+                              borderRadius: BorderRadius.circular(25),
+                            ),
+                            child: TextField(
+                              onChanged: (value) {
+                                setState(() {
+                                  searchQuery = value;
+                                });
+                              },
+                              decoration: const InputDecoration(
+                                hintText: 'Search applications...',
+                                prefixIcon: Icon(
+                                  Icons.search,
+                                  color: Colors.grey,
+                                ),
+                                border: InputBorder.none,
+                                contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                  vertical: 15,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            // Filter chips (only show if not loading)
+            if (!isLoading)
+              SliverToBoxAdapter(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: filterOptions.map((filter) {
+                        final isSelected = selectedFilter == filter;
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 12),
+                          child: FilterChip(
+                            label: Text(filter),
+                            selected: isSelected,
+                            onSelected: (selected) {
+                              setState(() {
+                                selectedFilter = filter;
+                              });
+                            },
+                            backgroundColor: Colors.grey[100],
+                            selectedColor: const Color(0xFF667eea).withOpacity(0.2),
+                            checkmarkColor: const Color(0xFF667eea),
+                            labelStyle: TextStyle(
+                              color: isSelected
+                                  ? const Color(0xFF667eea)
+                                  : Colors.grey[700],
+                              fontWeight: isSelected
+                                  ? FontWeight.w600
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+              ),
+
+            // Content area
+            if (isLoading)
+              const SliverFillRemaining(
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (errorMessage != null)
+              SliverFillRemaining(
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.error_outline, size: 64, color: Colors.grey[400]),
+                      const SizedBox(height: 16),
+                      Text(
+                        errorMessage!,
+                        style: TextStyle(color: Colors.grey[600], fontSize: 16),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: _fetchApplications,
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else if (filteredApplications.isEmpty)
+              SliverFillRemaining(
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.inbox_outlined, size: 64, color: Colors.grey[400]),
+                      const SizedBox(height: 16),
+                      Text(
+                        searchQuery.isNotEmpty || selectedFilter != 'All'
+                            ? 'No applications match your filter'
+                            : 'No applications yet',
+                        style: TextStyle(color: Colors.grey[600], fontSize: 16),
+                      ),
+                      if (searchQuery.isNotEmpty || selectedFilter != 'All') ...[
+                        const SizedBox(height: 8),
+                        TextButton(
+                          onPressed: () {
+                            setState(() {
+                              searchQuery = '';
+                              selectedFilter = 'All';
+                            });
+                          },
+                          child: const Text('Clear filters'),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              )
+            else
+              // Applications list (your existing SliverPadding with list remains the same)
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate((context, index) {
+                    final app = filteredApplications[index];
+                    return GestureDetector(
+                      onTap: () => _showApplicationDetails(app),
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.08),
+                              blurRadius: 15,
+                              offset: const Offset(0, 5),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Logo with hero animation
+                                Hero(
+                                  tag: 'logo_${app.applicationId}',
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: Image.network(
+                                      app.logo,
+                                      height: 60,
+                                      width: 60,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stackTrace) {
+                                        return Container(
+                                          height: 60,
+                                          width: 60,
+                                          decoration: BoxDecoration(
+                                            color: Colors.grey[300],
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          child: const Icon(
+                                            Icons.business,
+                                            color: Colors.grey,
+                                            size: 30,
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                // Details
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        app.title,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16,
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        app.company,
+                                        style: TextStyle(
+                                          color: Colors.grey[600],
+                                          fontSize: 14,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            Icons.location_on,
+                                            size: 14,
+                                            color: Colors.grey[500],
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Expanded(
+                                            child: Text(
+                                              app.location,
+                                              style: TextStyle(
+                                                color: Colors.grey[600],
+                                                fontSize: 12,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                              maxLines: 1,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                // Status pill
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: app.color.withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    app.status,
+                                    style: TextStyle(
+                                      color: app.color,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            const SizedBox(height: 16),
+
+                            // Quick info row
+                            Row(
+                              children: [
+                                Expanded(
+                                  flex: 3,
+                                  child: _buildQuickInfo(
+                                    Icons.attach_money,
+                                    app.salary,
+                                    Colors.green,
+                                  ),
+                                ),
+                                Expanded(
+                                  flex: 2,
+                                  child: _buildQuickInfo(
+                                    Icons.access_time,
+                                    '${app.daysAgo}d ago',
+                                    Colors.orange,
+                                  ),
+                                ),
+                                Expanded(
+                                  flex: 2,
+                                  child: _buildQuickInfo(
+                                    Icons.badge,
+                                    app.applicationId,
+                                    Colors.purple,
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            const SizedBox(height: 12),
+
+                            // Description preview
+                            Text(
+                              app.description,
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 14,
+                                height: 1.4,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+
+                            const SizedBox(height: 12),
+
+                            // Tap to view more
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                Text(
+                                  'Tap to view details',
+                                  style: TextStyle(
+                                    color: const Color(0xFF667eea),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Icon(
+                                  Icons.arrow_forward_ios,
+                                  size: 10,
+                                  color: const Color(0xFF667eea),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }, childCount: filteredApplications.length),
+                ),
+              ),
+
+            // Bottom padding
+            const SliverToBoxAdapter(child: SizedBox(height: 100)),
+          ],
+        ),
+      ),
     );
   }
 }

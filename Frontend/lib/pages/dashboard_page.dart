@@ -3,6 +3,8 @@ import 'login_page.dart';
 import 'internship_details_page.dart';
 import 'chatbot_page.dart';
 import '../services/api_service.dart'; // <-- add import
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class DashboardPage extends StatefulWidget {
   final Function(int)? onSwitchTab;
@@ -16,14 +18,17 @@ class _DashboardPageState extends State<DashboardPage> {
   int _statsPage = 0;
   DateTime _now = DateTime.now();
   bool _refreshing = false;
+  
+  // Add these missing variables
+  Map<String, dynamic> _currentStats = {}; // Add this line
+  bool _loadingStats = true; // Add this line
+  
   // Profile completion tasks (local demo state)
-  final List<_ProfileTask> _profileTasks = [
-    _ProfileTask('Add profile photo', Icons.person, 'Upload a clear headshot.', false),
-    _ProfileTask('Add education', Icons.school, 'Include degree & year.', true),
-    _ProfileTask('Add 3+ skills', Icons.code, 'Show relevant technologies.', false),
-    _ProfileTask('Upload resume', Icons.description, 'Attach a recent PDF.', false),
-    _ProfileTask('Complete bio/summary', Icons.badge, 'Short value statement.', true),
-  ];
+  bool _profileLoading = true;
+  bool _hasCv = false;
+
+  // Remove the hardcoded _profileTasks list and replace with dynamic calculation
+  double get _profileCompletion => _hasCv ? 1.0 : 0.4; // 100% if CV uploaded, 40% if not
 
   // Recent activities (demo data)
   final List<Map<String, dynamic>> _recentActivities = [
@@ -47,13 +52,14 @@ class _DashboardPageState extends State<DashboardPage> {
     },
   ];
 
-  double get _profileCompletion => _profileTasks.where((t)=>t.done).length / _profileTasks.length;
-
   @override
   void initState() {
     super.initState();
     _statsController = PageController(viewportFraction: .88);
-    _fetchSavedInternships(); // <-- load saved items
+    _fetchSavedInternships();
+    _fetchRecommendations();
+    _fetchApplicationStats();
+    _fetchProfileCompletion(); // Add this
   }
 
   @override
@@ -64,7 +70,12 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Future<void> _onRefresh() async {
     setState(() => _refreshing = true);
-    await Future.delayed(const Duration(milliseconds: 900)); // TODO hook real calls
+    await Future.wait([
+      _fetchApplicationStats(),
+      _fetchSavedInternships(),
+      _fetchRecommendations(),
+      _fetchProfileCompletion(), // Add this
+    ]);
     setState(() {
       _now = DateTime.now();
       _refreshing = false;
@@ -189,14 +200,38 @@ class _DashboardPageState extends State<DashboardPage> {
 
   // Stats pager
   Widget _buildStatsPager() {
+    if (_loadingStats) {
+      return const SizedBox(
+        height: 170,
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     final items = [
-      _StatSummary(applications: 12, interviews: 3, saved: 8, title: 'This Week'),
-      _StatSummary(applications: 34, interviews: 6, saved: 21, title: 'This Month'),
+      _StatSummary(
+        applications: _currentStats['last_7_days']?['total_applications'] ?? 0,
+        interviews: _currentStats['last_7_days']?['non_applied_applications'] ?? 0,
+        saved: _currentStats['last_7_days']?['saved_count'] ?? 0,
+        title: 'Last 7 Days'
+      ),
+      _StatSummary(
+        applications: _currentStats['last_30_days']?['total_applications'] ?? 0,
+        interviews: _currentStats['last_30_days']?['non_applied_applications'] ?? 0,
+        saved: _currentStats['last_30_days']?['saved_count'] ?? 0,
+        title: 'Last 30 Days'
+      ),
+      _StatSummary(
+        applications: _currentStats['total_applications'] ?? 0,
+        interviews: _currentStats['non_applied_applications'] ?? 0,
+        saved: _currentStats['saved_count'] ?? 0,
+        title: 'All Time'
+      ),
     ];
+
     return Column(
       children: [
         SizedBox(
-          height: 170, // slightly reduced to align internal calculated heights & avoid flex rounding overflow
+          height: 170,
           child: PageView.builder(
             controller: _statsController,
             onPageChanged: (i) => setState(() => _statsPage = i),
@@ -227,9 +262,25 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Widget _buildProfileCompletionCard() {
-  final completion = _profileCompletion; // dynamic progress
+    if (_profileLoading) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Container(
+          height: 120,
+          decoration: BoxDecoration(
+            color: Colors.deepPurple.shade50,
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: const Center(child: CircularProgressIndicator()),
+        ),
+      );
+    }
+
+    final completion = _profileCompletion;
+    final completionPercent = (completion * 100).round();
+    
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal:16),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
@@ -251,7 +302,10 @@ class _DashboardPageState extends State<DashboardPage> {
                     valueColor: AlwaysStoppedAnimation(Colors.deepPurple),
                   ),
                 ),
-                Text('${(completion*100).round()}%', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14))
+                Text(
+                  '$completionPercent%',
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                )
               ],
             ),
             const SizedBox(width: 18),
@@ -259,9 +313,17 @@ class _DashboardPageState extends State<DashboardPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Complete your profile', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                  Text(
+                    _hasCv ? 'Profile Complete!' : 'Complete your profile',
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                  ),
                   const SizedBox(height: 6),
-                  Text('Add education, skills & resume to boost visibility.', style: TextStyle(fontSize: 12, color: Colors.grey[700])),
+                  Text(
+                    _hasCv 
+                        ? 'Your profile is ready. Keep applying!' 
+                        : 'Upload your CV to complete your profile.',
+                    style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                  ),
                   const SizedBox(height: 10),
                   ClipRRect(
                     borderRadius: BorderRadius.circular(6),
@@ -269,7 +331,9 @@ class _DashboardPageState extends State<DashboardPage> {
                       value: completion,
                       minHeight: 6,
                       backgroundColor: Colors.deepPurple.withOpacity(.15),
-                      valueColor: const AlwaysStoppedAnimation(Colors.deepPurple),
+                      valueColor: AlwaysStoppedAnimation(
+                        _hasCv ? Colors.green : Colors.deepPurple,
+                      ),
                     ),
                   ),
                 ],
@@ -278,7 +342,7 @@ class _DashboardPageState extends State<DashboardPage> {
             const SizedBox(width: 8),
             TextButton(
               onPressed: () => widget.onSwitchTab?.call(3),
-              child: const Text('Update'),
+              child: Text(_hasCv ? 'View' : 'Update'),
             )
           ],
         ),
@@ -286,46 +350,123 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
+  // Copy this from internships_page.dart or import it
+  Map<String, dynamic> _normalizeJob(Map<String, dynamic> j) {
+    final skillsRaw = j['required_skills'];
+    List<String> skills;
+    if (skillsRaw is List) {
+      skills = skillsRaw.map((e) => e.toString()).toList();
+    } else if (skillsRaw is String) {
+      try {
+        final parsed = (jsonDecode(skillsRaw) as List).map((e) => e.toString()).toList();
+        skills = parsed;
+      } catch (_) {
+        skills = skillsRaw.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+      }
+    } else {
+      skills = [];
+    }
+
+    String duration = '';
+    if (j['duration_months'] != null) {
+      final d = j['duration_months'];
+      duration = d is num ? '${d.toInt()} months' : d.toString();
+    }
+
+    String stipend = '';
+    if (j['stipend'] != null) {
+      final s = j['stipend'];
+      stipend = s is num ? '\$${s.toStringAsFixed(0)}/month' : s.toString();
+    }
+
+    return {
+      'company_name': j['company_name'] ?? j['company'] ?? 'Unknown Company',
+      'title': j['title'] ?? j['position_title'] ?? 'Internship',
+      'location': j['location'] ?? (j['employment_type'] ?? 'Remote'),
+      'duration_months': duration.isNotEmpty ? duration : (j['duration']?.toString() ?? 'N/A'),
+      'stipend': stipend.isNotEmpty ? stipend : (j['salary']?.toString() ?? 'N/A'),
+      'required_skills': skills,
+      'company_logo_url': j['company_logo_url'] ?? j['logo_url'] ?? '',
+      'id': j['id'],
+      '_raw': j,
+    };
+  }
+
+  // Replace _buildRecommendations with backend-powered version
   Widget _buildRecommendations() {
-    final recs = [
-      {'role':'Flutter Dev Intern','company':'Airbnb','color':Colors.teal},
-      {'role':'ML Intern','company':'OpenAI','color':Colors.indigo},
-      {'role':'Cloud Intern','company':'AWS','color':Colors.orange},
-      {'role':'Security Intern','company':'Cloudflare','color':Colors.blueGrey},
-    ];
+    if (_loadingRecommendations) {
+      return const SizedBox(
+        height: 140,
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_recommendedInternships.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 16),
+        child: Text('No recommendations found.', style: TextStyle(color: Colors.grey)),
+      );
+    }
     return SizedBox(
       height: 140,
       child: ListView.separated(
-        padding: const EdgeInsets.symmetric(horizontal:16),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
         itemBuilder: (_, i) {
-          final r = recs[i];
-          return Container(
-            width: 220,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: (r['color'] as Color).withOpacity(.08),
-              borderRadius: BorderRadius.circular(22),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(children:[
-                  Container(width:38,height:38, decoration: BoxDecoration(color: (r['color'] as Color).withOpacity(.25), borderRadius: BorderRadius.circular(14)), child: Icon(Icons.work, color: r['color'] as Color, size: 20)),
+          final r = _recommendedInternships[i];
+          return InkWell(
+            borderRadius: BorderRadius.circular(22),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => InternshipDetailsPage(
+                    job: (r['_raw'] is Map)
+                        ? Map<String, dynamic>.from(r['_raw'] as Map)
+                        : r,
+                  ),
+                ),
+              );
+            },
+            child: Container(
+              width: 220,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.deepPurple.withOpacity(.08),
+                borderRadius: BorderRadius.circular(22),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: Colors.deepPurple.withOpacity(.25),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: r['company_logo_url'].isNotEmpty
+                          ? Image.network(r['company_logo_url'], fit: BoxFit.cover)
+                          : Icon(Icons.work, color: Colors.deepPurple, size: 20),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      onPressed: () {},
+                      icon: const Icon(Icons.bookmark_add_outlined, color: Colors.deepPurple),
+                    )
+                  ]),
                   const Spacer(),
-                  IconButton(onPressed: (){}, icon: Icon(Icons.bookmark_add_outlined, color: r['color'] as Color))
-                ]),
-                const Spacer(),
-                Text(r['role'] as String, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-                const SizedBox(height:4),
-                Text(r['company'] as String, style: TextStyle(fontSize: 11, color: Colors.grey[700]))
-              ],
+                  Text(r['title'], style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                  const SizedBox(height: 4),
+                  Text(r['company_name'], style: TextStyle(fontSize: 11, color: Colors.grey[700])),
+                ],
+              ),
             ),
           );
         },
         separatorBuilder: (_, __) => const SizedBox(width: 14),
-        itemCount: recs.length,
+        itemCount: _recommendedInternships.length,
       ),
     );
   }
@@ -473,59 +614,103 @@ class _DashboardPageState extends State<DashboardPage> {
 
   // Activity chart (kept lightweight for now; replace with real data later)
   Widget _buildActivityChart() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 24,
-            spreadRadius: 0,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Text('Last 7 Days', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal:10, vertical:4),
-                decoration: BoxDecoration(color: Colors.green.withOpacity(.12), borderRadius: BorderRadius.circular(30)),
-                child: const Row(children:[Icon(Icons.trending_up, size:14, color: Colors.green), SizedBox(width:4), Text('+23%', style: TextStyle(color: Colors.green, fontSize: 11, fontWeight: FontWeight.w600))]),
-              )
-            ],
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            height: 180,
-            child: CustomPaint(
-              size: Size.infinite,
-              painter: LineChartPainter(),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: const [
-              _ChartLegend(label: 'Applications', color: Colors.blue, value: '12'),
-              _ChartLegend(label: 'Responses', color: Colors.green, value: '5'),
-              _ChartLegend(label: 'Interviews', color: Colors.orange, value: '3'),
-            ],
-          )
-        ],
-      ),
-    );
-  }
+    // Calculate growth percentage for last 7 days vs previous 7 days
+  final last7Days = _currentStats['last_7_days']?['total_applications'] ?? 0;
+  final last30Days = _currentStats['last_30_days']?['total_applications'] ?? 0;
+  final previous7Days = last30Days - last7Days; // Approximate previous period
+  final growthPercent = previous7Days > 0 ? ((last7Days - previous7Days) / previous7Days * 100).round() : 0;
+  final isPositiveGrowth = growthPercent > 0;
 
-  // Data -----------------------------------------------------------------
-  // Replace hard-coded demo with backend data
-  List<Map<String,dynamic>> _savedInternships = []; // <-- was final demo list
+  return Container(
+    padding: const EdgeInsets.all(20),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(20),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.04),
+          blurRadius: 24,
+          spreadRadius: 0,
+          offset: const Offset(0, 8),
+        ),
+      ],
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Text('Last 7 Days', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: (isPositiveGrowth ? Colors.green : Colors.red).withOpacity(.12),
+                borderRadius: BorderRadius.circular(30)
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    isPositiveGrowth ? Icons.trending_up : Icons.trending_down,
+                    size: 14,
+                    color: isPositiveGrowth ? Colors.green : Colors.red,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    '${isPositiveGrowth ? '+' : ''}$growthPercent%',
+                    style: TextStyle(
+                      color: isPositiveGrowth ? Colors.green : Colors.red,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          ],
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          height: 200, // Increased from 180 to accommodate day labels
+          child: _loadingStats
+              ? const Center(child: CircularProgressIndicator())
+              : CustomPaint(
+                  size: Size.infinite,
+                  painter: LineChartPainter(
+                    applicationData: _generateWeeklyData(last7Days),
+                    responseData: _generateWeeklyData(_currentStats['last_7_days']?['non_applied_applications'] ?? 0),
+                    interviewData: _generateWeeklyData((_currentStats['last_7_days']?['non_applied_applications'] ?? 0) ~/ 2),
+                  ),
+                ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _ChartLegend(
+              label: 'Applications',
+              color: Colors.blue,
+              value: '${_currentStats['last_7_days']?['total_applications'] ?? 0}',
+            ),
+            _ChartLegend(
+              label: 'Responses',
+              color: Colors.green,
+              value: '${_currentStats['last_7_days']?['non_applied_applications'] ?? 0}',
+            ),
+            _ChartLegend(
+              label: 'Interviews',
+              color: Colors.orange,
+              value: '${(_currentStats['last_7_days']?['non_applied_applications'] ?? 0) ~/ 2}', // Estimate
+            ),
+          ],
+        )
+      ],
+    ),
+  );
+}
+List<Map<String,dynamic>> _savedInternships = []; // <-- was final demo list
+  List<Map<String, dynamic>> _recommendedInternships = [];
+  bool _loadingRecommendations = true;
 
   Future<void> _fetchSavedInternships() async {
     final res = await ApiService.getSavedInternshipsWithStoredApplicant();
@@ -537,6 +722,95 @@ class _DashboardPageState extends State<DashboardPage> {
       setState(() => _savedInternships = list);
     } else {
       // Keep empty silently; UI design unchanged
+    }
+  }
+
+  Future<void> _fetchRecommendations() async {
+    setState(() => _loadingRecommendations = true);
+    final result = await ApiService.getAllJobsWithStoredApplicant();
+    if (!mounted) return;
+    if (result['success'] == true) {
+      final jobs = (result['jobs'] as List)
+          .map<Map<String, dynamic>>((j) => _normalizeJob(j as Map<String, dynamic>))
+          .toList();
+      setState(() {
+        _recommendedInternships = jobs.take(6).toList(); // show top 6
+        _loadingRecommendations = false;
+      });
+    } else {
+      setState(() {
+        _recommendedInternships = [];
+        _loadingRecommendations = false;
+      });
+    }
+  }
+
+  // Add this missing method
+  Future<void> _fetchApplicationStats() async {
+    setState(() => _loadingStats = true);
+    
+    try {
+      // Get applicant_id from SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      Map<String, dynamic>? profile;
+      try {
+        final p = prefs.getString('profile_data');
+        if (p != null) profile = jsonDecode(p);
+      } catch (_) {}
+
+      final applicantId = profile?['applicant_id']?.toString();
+      if (applicantId == null || applicantId.isEmpty) {
+        setState(() => _loadingStats = false);
+        return;
+      }
+
+      final result = await ApiService.getApplicationStats(applicantId);
+      if (!mounted) return;
+
+      if (result['success'] == true && result['stats'] != null) {
+        setState(() {
+          _currentStats = Map<String, dynamic>.from(result['stats']);
+          _loadingStats = false;
+        });
+      } else {
+        setState(() => _loadingStats = false);
+      }
+    } catch (e) {
+      print('Error fetching stats: $e');
+      setState(() => _loadingStats = false);
+    }
+  }
+
+  // Add this method to fetch profile completion status
+  Future<void> _fetchProfileCompletion() async {
+    setState(() => _profileLoading = true);
+    
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      Map<String, dynamic>? profile;
+      try {
+        final p = prefs.getString('profile_data');
+        if (p != null) profile = jsonDecode(p);
+      } catch (_) {}
+
+      if (profile != null) {
+        final cvUrl = profile['cv_url']?.toString() ?? '';
+        setState(() {
+          _hasCv = cvUrl.isNotEmpty;
+          _profileLoading = false;
+        });
+      } else {
+        setState(() {
+          _hasCv = false;
+          _profileLoading = false;
+        });
+      }
+    } catch (e) {
+      print('Error fetching profile completion: $e');
+      setState(() {
+        _hasCv = false;
+        _profileLoading = false;
+      });
     }
   }
 
@@ -567,6 +841,39 @@ class _DashboardPageState extends State<DashboardPage> {
       '_raw': Map<String, dynamic>.from(src),
     };
   }
+
+// Helper method to generate realistic weekly distribution
+List<int> _generateWeeklyData(int totalCount) {
+  if (totalCount == 0) return [0, 0, 0, 0, 0, 0, 0];
+  
+  // Distribute the total count across 7 days with some realistic variation
+  // More activity on weekdays, less on weekends
+  final weekdayWeight = [0.18, 0.20, 0.22, 0.15, 0.12, 0.08, 0.05]; // Mon-Sun
+  
+  List<int> data = [];
+  int remaining = totalCount;
+  
+  for (int i = 0; i < 7; i++) {
+    if (i == 6) {
+      // Last day gets remaining count
+      data.add(remaining);
+    } else {
+      final dayCount = (totalCount * weekdayWeight[i]).round();
+      data.add(dayCount);
+      remaining -= dayCount;
+    }
+  }
+  
+  // Ensure no negative values
+  for (int i = 0; i < data.length; i++) {
+    if (data[i] < 0) data[i] = 0;
+  }
+  
+  return data;
+}
+  // Data -----------------------------------------------------------------
+  // Replace hard-coded demo with backend data
+  
 
   IconData _pickIconForTitle(String t) {
     final s = t.toLowerCase();
@@ -812,6 +1119,16 @@ class _ChartLegend extends StatelessWidget {
 }
 
 class LineChartPainter extends CustomPainter {
+  final List<int> applicationData;
+  final List<int> responseData;
+  final List<int> interviewData;
+
+  LineChartPainter({
+    required this.applicationData,
+    required this.responseData,
+    required this.interviewData,
+  });
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
@@ -819,11 +1136,8 @@ class LineChartPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
-    // Sample data points for the chart
-    final applicationData = [2, 1, 3, 2, 4, 1, 2]; // Applications per day
-    final responseData = [0, 1, 1, 0, 2, 0, 1];    // Responses per day
-    final interviewData = [0, 0, 1, 0, 1, 0, 1];   // Interviews per day
-
+    // Reserve space for day labels at bottom
+    final chartHeight = size.height - 25; // Reserve 25px for day labels
     final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     
     // Draw grid lines
@@ -831,9 +1145,9 @@ class LineChartPainter extends CustomPainter {
       ..color = Colors.grey.withOpacity(0.2)
       ..strokeWidth = 1;
 
-    // Horizontal grid lines
+    // Horizontal grid lines (only in chart area)
     for (int i = 0; i <= 5; i++) {
-      final y = size.height - (i * size.height / 5);
+      final y = chartHeight - (i * chartHeight / 5);
       canvas.drawLine(
         Offset(0, y),
         Offset(size.width, y),
@@ -841,22 +1155,22 @@ class LineChartPainter extends CustomPainter {
       );
     }
 
-    // Vertical grid lines
+    // Vertical grid lines (only in chart area)
     for (int i = 0; i < 7; i++) {
       final x = i * size.width / 6;
       canvas.drawLine(
         Offset(x, 0),
-        Offset(x, size.height),
+        Offset(x, chartHeight),
         gridPaint,
       );
     }
 
-    // Draw lines
-    _drawLine(canvas, size, applicationData, Colors.blue, paint);
-    _drawLine(canvas, size, responseData, Colors.green, paint);
-    _drawLine(canvas, size, interviewData, Colors.orange, paint);
+    // Draw lines with updated chart height
+    _drawLine(canvas, Size(size.width, chartHeight), applicationData, Colors.blue, paint);
+    _drawLine(canvas, Size(size.width, chartHeight), responseData, Colors.green, paint);
+    _drawLine(canvas, Size(size.width, chartHeight), interviewData, Colors.orange, paint);
 
-    // Draw day labels
+    // Draw day labels below the chart
     final textPainter = TextPainter(
       textDirection: TextDirection.ltr,
     );
@@ -867,12 +1181,15 @@ class LineChartPainter extends CustomPainter {
         style: TextStyle(
           color: Colors.grey[600],
           fontSize: 10,
+          fontWeight: FontWeight.w500,
         ),
       );
       textPainter.layout();
       
-      final x = i * size.width / 6 - textPainter.width / 2;
-      textPainter.paint(canvas, Offset(x, size.height + 10));
+      // Position labels below the chart area
+      final x = (i * size.width / (days.length - 1)) - (textPainter.width / 2);
+      final y = chartHeight + 8; // 8px gap below chart
+      textPainter.paint(canvas, Offset(x, y));
     }
   }
 
@@ -880,11 +1197,11 @@ class LineChartPainter extends CustomPainter {
     paint.color = color;
     
     final path = Path();
-    final maxValue = 5; // Max value for scaling
+    final maxValue = data.isNotEmpty ? data.reduce((a, b) => a > b ? a : b).clamp(1, 10) : 5;
     
     for (int i = 0; i < data.length; i++) {
       final x = i * size.width / (data.length - 1);
-      final y = size.height - (data[i] / maxValue * size.height);
+      final y = size.height - (data[i] / maxValue * size.height * 0.8) - (size.height * 0.1); // Add padding
       
       if (i == 0) {
         path.moveTo(x, y);
@@ -906,5 +1223,5 @@ class LineChartPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(CustomPainter oldDelegate) => false;
+  bool shouldRepaint(CustomPainter oldDelegate) => true; // Changed to true for dynamic updates
 }
