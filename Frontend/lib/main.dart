@@ -58,24 +58,33 @@ class _AppInitializerState extends State<AppInitializer> {
 
   Future<void> _checkLoginStatus() async {
     try {
+      print('🔍 AppInitializer: Checking login status...');
       final isLoggedIn = await ApiService.isLoggedIn();
+      print('🔍 AppInitializer: Is logged in = $isLoggedIn');
       
       if (isLoggedIn) {
         final userData = await ApiService.getUserData();
+        print('🔍 AppInitializer: User data = $userData');
         if (userData != null) {
           final userType = userData['user_type'];
+          print('🔍 AppInitializer: User type = $userType');
           if (userType == 'recruiter') {
+            print('🔍 AppInitializer: Navigating to recruiter main');
             Navigator.pushReplacementNamed(context, '/recruiter_main');
           } else {
+            print('🔍 AppInitializer: Navigating to applicant main');
             Navigator.pushReplacementNamed(context, '/main');
           }
         } else {
+          print('🔍 AppInitializer: User data is null, going to boarding');
           Navigator.pushReplacementNamed(context, '/boarding0');
         }
       } else {
+        print('🔍 AppInitializer: Not logged in, going to boarding');
         Navigator.pushReplacementNamed(context, '/boarding0');
       }
     } catch (e) {
+      print('🔍 AppInitializer: Error checking login status: $e');
       // If there's an error, go to boarding
       Navigator.pushReplacementNamed(context, '/boarding0');
     }

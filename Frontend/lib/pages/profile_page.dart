@@ -142,9 +142,17 @@ class _ProfilePageState extends State<ProfilePage> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Unable to read file path')));
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
+    
+    // Check file size - max 3MB
+    const maxSizeBytes = 3 * 1024 * 1024; // 3MB in bytes
+    if (file.size > maxSizeBytes) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('File too large (max 5MB)')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('File too large (max 3MB)'),
+          backgroundColor: Colors.red,
+        ),
+      );
       return;
     }
 
@@ -158,6 +166,89 @@ class _ProfilePageState extends State<ProfilePage> {
       isUploading = true;
     });
 
+    // First validate if the file is actually a CV using Gemini
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Row(
+          children: [
+            SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+            ),
+            SizedBox(width: 12),
+            Text('Validating CV content with AI...'),
+          ],
+        ),
+        backgroundColor: Colors.blue,
+        duration: Duration(seconds: 2),
+      ),
+    );
+
+    final validationRes = await UploadService.validateCvContent(filePath: selectedFilePath!);
+    
+    if (!mounted) return;
+    
+    if (validationRes['success'] != true) {
+      setState(() {
+        isUploading = false;
+      });
+      
+      final message = validationRes['message']?.toString() ?? 'CV validation failed';
+      final details = validationRes['details'];
+      
+      // Show detailed error dialog for validation failures
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('CV Validation Failed'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(message),
+              if (details != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Reason: ${details['reasoning'] ?? 'Unknown'}',
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ],
+              const SizedBox(height: 12),
+              const Text(
+                'Please upload a valid CV/Resume that includes:\n'
+                '• Personal information\n'
+                '• Education history\n'
+                '• Work experience\n'
+                '• Skills section',
+                style: TextStyle(fontSize: 12),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    // If validation passed, proceed with upload
+    if (!mounted) return;
+    final validationDetails = validationRes['details'];
+    final confidence = validationDetails?['confidence'] ?? 'unknown';
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('CV validated successfully (confidence: $confidence). Uploading...'),
+        backgroundColor: Colors.green,
+      ),
+    );
+
     final res = await UploadService.uploadCvFile(filePath: selectedFilePath!);
 
     if (!mounted) return;
@@ -167,10 +258,22 @@ class _ProfilePageState extends State<ProfilePage> {
       lastUploadedUrl = res['cvUrl']?.toString() ?? lastUploadedUrl;
     });
 
+    // Create upload success message
+    String message = res['message']?.toString() ?? (res['success'] == true ? 'Upload successful' : 'Upload failed');
+    
+    // Add job matching information if available
+    if (res['success'] == true && res['matchingTriggered'] == true) {
+      final matchedCount = res['matchedCount']?.toString() ?? '0';
+      message += '\n🎯 Found $matchedCount matching jobs for you!';
+    } else if (res['success'] == true && res['matchingTriggered'] == false) {
+      message += '\n⚠️ Job matching will be updated shortly';
+    }
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(res['message']?.toString() ?? (res['success'] == true ? 'Upload successful' : 'Upload failed')),
+        content: Text(message),
         backgroundColor: res['success'] == true ? Colors.green : Colors.red,
+        duration: const Duration(seconds: 4), // Longer duration for more info
       ),
     );
 

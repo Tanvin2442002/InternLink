@@ -172,10 +172,11 @@ class _DashboardPageState extends State<DashboardPage> {
             ),
           ),
           PopupMenuButton<String>(
-            onSelected: (v) {
+            onSelected: (v) async {
               if (v == 'profile') {
                 widget.onSwitchTab?.call(3);
               } else if (v == 'logout') {
+                await ApiService.logout();
                 Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginPage()));
               }
             },

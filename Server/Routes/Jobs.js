@@ -182,6 +182,72 @@ router.get("/saved-internships/:applicant_id", async (req, res) => {
   }
 });
 
+// POST /trigger-matching - Trigger job matching for a specific applicant
+router.post("/trigger-matching", async (req, res) => {
+  try {
+    const { applicant_id } = req.body;
+    
+    if (!applicant_id) {
+      return res.status(400).json({
+        success: false,
+        error: "applicant_id is required"
+      });
+    }
+
+    console.log("[Jobs] Triggering job matching for applicant:", applicant_id);
+
+    // Get all jobs
+    const rows = await sql`SELECT * FROM jobs`;
+    if (!rows || rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: "No jobs found"
+      });
+    }
+
+    // Get applicant's CV URL
+    let cvUrl = null;
+    try {
+      const applicantRows = await sql`
+        SELECT cv_url FROM applicants
+        WHERE applicant_id = ${applicant_id}
+        LIMIT 1
+      `;
+      if (applicantRows && applicantRows.length > 0) {
+        cvUrl = applicantRows[0].cv_url;
+        console.log("[Jobs] Found CV URL for applicant:", cvUrl);
+      }
+    } catch (error) {
+      console.warn("[Jobs] Could not fetch CV URL:", error.message);
+      // Continue without CV - will use local matching
+    }
+
+    // Run the job matching
+    const result = await matchJobs({ jobs: rows, cvUrl });
+    console.log("[Jobs] Job matching result:", result);
+
+    const matchedJobs = rows.filter(job => result.matches.includes(job.id));
+    console.log("[Jobs] Found", matchedJobs.length, "matched jobs out of", rows.length, "total jobs");
+
+    return res.status(200).json({
+      success: true,
+      message: `Job matching completed. Found ${matchedJobs.length} matching jobs.`,
+      matchedCount: matchedJobs.length,
+      totalJobs: rows.length,
+      matches: result.matches,
+      scores: result.scores
+    });
+
+  } catch (error) {
+    console.error("[Jobs] Error triggering job matching:", error);
+    return res.status(500).json({
+      success: false,
+      error: "Failed to trigger job matching",
+      details: error.message
+    });
+  }
+});
+
 module.exports = router;
 
 /*

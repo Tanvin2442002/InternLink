@@ -8,6 +8,76 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'api_service.dart';
 
 class UploadService {
+  // Validate CV content using Gemini AI
+  static Future<Map<String, dynamic>> validateCvContent({
+    required String filePath,
+  }) async {
+    try {
+      final file = File(filePath);
+      if (!file.existsSync()) {
+        return {'success': false, 'message': 'File not found'};
+      }
+
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('auth_token');
+
+      final base = ApiService.baseUrl;
+      final uri = Uri.parse('$base/api/validate-cv');
+
+      final req = http.MultipartRequest('POST', uri);
+      if (token != null && token.isNotEmpty) {
+        req.headers['Authorization'] = 'Bearer $token';
+      }
+      req.headers['Accept'] = 'application/json';
+
+      req.files.add(await http.MultipartFile.fromPath(
+        'cv',
+        filePath,
+        contentType: MediaType('application', 'pdf'),
+      ));
+
+      try {
+        final streamed = await req.send().timeout(const Duration(seconds: 30));
+        final resp = await http.Response.fromStream(streamed);
+        final raw = resp.body;
+        final ctype = resp.headers['content-type'] ?? '';
+        Map<String, dynamic> body = {};
+        
+        if (raw.isNotEmpty && (ctype.contains('application/json') || raw.trim().startsWith('{') || raw.trim().startsWith('['))) {
+          try {
+            final decoded = json.decode(raw);
+            if (decoded is Map<String, dynamic>) body = decoded;
+          } catch (_) {
+            // leave body as {}
+          }
+        }
+
+        print('[UploadService] CV Validation POST $uri -> ${resp.statusCode}');
+
+        if (resp.statusCode == 200) {
+          return {
+            'success': body['isValidCv'] == true,
+            'message': body['message'] ?? (body['isValidCv'] == true ? 'Valid CV' : 'Not a valid CV'),
+            'details': body['details'],
+          };
+        } else {
+          return {
+            'success': false,
+            'message': body['error'] ?? body['message'] ?? 'CV validation failed',
+          };
+        }
+      } on SocketException {
+        return {'success': false, 'message': 'No internet connection'};
+      } on TimeoutException {
+        return {'success': false, 'message': 'CV validation timed out'};
+      } catch (e) {
+        return {'success': false, 'message': 'Network error: $e'};
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'Failed to validate CV: $e'};
+    }
+  }
+
   static Future<Map<String, dynamic>> uploadCvFile({
     required String filePath,
     String? applicantIdOverride,
@@ -76,12 +146,34 @@ class UploadService {
           print('[UploadService] POST $uri -> ${resp.statusCode} (${ctype.split(";").first})');
 
           if (resp.statusCode == 200 || resp.statusCode == 201) {
-            return {
+            final uploadResult = {
               'success': true,
               'message': body['message'] ?? 'Upload successful',
               'cvUrl': body['cvUrl'],
               'status': resp.statusCode,
             };
+
+            // Trigger job matching automatically after successful CV upload
+            print('[UploadService] CV uploaded successfully, triggering job matching...');
+            try {
+              final matchResult = await ApiService.triggerJobMatching();
+              if (matchResult['success'] == true) {
+                print('[UploadService] Job matching triggered successfully: ${matchResult['message']}');
+                uploadResult['matchingTriggered'] = true;
+                uploadResult['matchedCount'] = matchResult['matchedCount'];
+                uploadResult['matchingMessage'] = matchResult['message'];
+              } else {
+                print('[UploadService] Job matching failed: ${matchResult['message']}');
+                uploadResult['matchingTriggered'] = false;
+                uploadResult['matchingError'] = matchResult['message'];
+              }
+            } catch (e) {
+              print('[UploadService] Error triggering job matching: $e');
+              uploadResult['matchingTriggered'] = false;
+              uploadResult['matchingError'] = 'Failed to trigger job matching: $e';
+            }
+
+            return uploadResult;
           } else {
             lastError = {
               'success': false,

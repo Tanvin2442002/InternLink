@@ -1,10 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://10.0.2.2:5000'; // For Android emulator
+  static const String baseUrl = 'http://192.168.68.109:5000'; // For Android emulator
 
   static Future<bool> testConnection() async {
     try {
@@ -28,9 +29,27 @@ class ApiService {
   static Future<bool> isLoggedIn() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('auth_token');
-      return token != null && token.isNotEmpty;
+      final userDataString = prefs.getString('user_data');
+      print('🔍 ApiService: User data string from storage = $userDataString');
+      
+      if (userDataString != null && userDataString.isNotEmpty) {
+        try {
+          final userData = json.decode(userDataString);
+          final hasUserId = userData['user_id'] != null;
+          final hasUserType = userData['user_type'] != null;
+          final result = hasUserId && hasUserType;
+          print('🔍 ApiService: isLoggedIn result = $result (based on user data)');
+          return result;
+        } catch (e) {
+          print('🔍 ApiService: Error parsing user data: $e');
+          return false;
+        }
+      } else {
+        print('🔍 ApiService: No user data found');
+        return false;
+      }
     } catch (e) {
+      print('🔍 ApiService: Error checking login status: $e');
       return false;
     }
   }
@@ -39,11 +58,15 @@ class ApiService {
     try {
       final prefs = await SharedPreferences.getInstance();
       final userDataString = prefs.getString('user_data');
+      print('🔍 ApiService: User data string from storage = $userDataString');
       if (userDataString != null) {
-        return json.decode(userDataString);
+        final userData = json.decode(userDataString);
+        print('🔍 ApiService: Parsed user data = $userData');
+        return userData;
       }
       return null;
     } catch (e) {
+      print('🔍 ApiService: Error getting user data: $e');
       return null;
     }
   }
@@ -139,16 +162,45 @@ class ApiService {
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
+        print('🔍 Login response received successfully');
 
-        final prefs = await SharedPreferences.getInstance();
-        if (data['token'] != null) {
-          await prefs.setString('auth_token', data['token']);
-        }
-        if (data['user'] != null) {
-          await prefs.setString('user_data', json.encode(data['user']));
-        }
-        if (data['profile'] != null) {
-          await prefs.setString('profile_data', json.encode(data['profile']));
+        // Try to save data with retry logic
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          
+          // Note: Backend doesn't provide a token, so we'll use user data for auth
+          print('🔍 Backend response keys: ${data.keys.toList()}');
+          
+          // Save user data with verification  
+          if (data['user'] != null) {
+            final userDataJson = json.encode(data['user']);
+            await prefs.setString('user_data', userDataJson);
+            // Immediately verify it was saved
+            final savedUserData = prefs.getString('user_data');
+            if (savedUserData == userDataJson) {
+              print('🔍 ✅ User data saved and verified');
+            } else {
+              print('🔍 ❌ User data save verification failed');
+            }
+          }
+          
+          // Save profile data
+          if (data['profile'] != null) {
+            await prefs.setString('profile_data', json.encode(data['profile']));
+            print('🔍 ✅ Profile data saved');
+          }
+          
+          // Force commit and reload
+          final commitSuccess = await prefs.commit();
+          print('🔍 SharedPreferences commit result: $commitSuccess');
+          
+          // Final verification
+          await prefs.reload();
+          final finalUserData = prefs.getString('user_data');
+          print('🔍 Final verification - UserData: ${finalUserData != null ? "EXISTS" : "NULL"}');
+          
+        } catch (e) {
+          print('🔍 ❌ Error saving to SharedPreferences: $e');
         }
 
         return {
@@ -186,9 +238,9 @@ class ApiService {
 
   static Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('auth_token');
     await prefs.remove('user_data');
     await prefs.remove('profile_data');
+    print('🔍 Logout: Cleared user and profile data');
   }
 
   static Future<Map<String, dynamic>> sendPasswordResetEmail(
@@ -455,6 +507,81 @@ class ApiService {
     }
     print("Using applicant_id: $applicantId to fetch jobs");
     return getAllJobs(applicantId: applicantId);
+  }
+
+  // Method to trigger job matching for the current user
+  static Future<Map<String, dynamic>> triggerJobMatching() async {
+    final prefs = await SharedPreferences.getInstance();
+    Map<String, dynamic>? profile;
+    Map<String, dynamic>? user;
+
+    try {
+      final p = prefs.getString('profile_data');
+      final u = prefs.getString('user_data');
+      if (p != null) profile = json.decode(p);
+      if (u != null) user = json.decode(u);
+    } catch (_) {}
+
+    final applicantId =
+        (profile?['applicant_id'] ??
+                profile?['id'] ??
+                user?['applicant_id'] ??
+                user?['user_id'] ??
+                user?['id'])
+            ?.toString();
+
+    if (applicantId == null || applicantId.isEmpty) {
+      return {
+        'success': false,
+        'message': 'Applicant ID not found. Please log in again.',
+      };
+    }
+
+    try {
+      print("Triggering job matching for applicant_id: $applicantId");
+      
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/api/trigger-matching'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: json.encode({'applicant_id': applicantId}),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      final data = json.decode(response.body);
+      
+      if (response.statusCode == 200) {
+        print("Job matching triggered successfully: ${data['message']}");
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Job matching updated successfully',
+          'matchedCount': data['matchedCount'],
+        };
+      } else {
+        return {
+          'success': false,
+          'message': data['error'] ?? data['message'] ?? 'Failed to trigger job matching',
+        };
+      }
+    } on SocketException {
+      return {
+        'success': false,
+        'message': 'No internet connection. Please check your network.',
+      };
+    } on TimeoutException {
+      return {
+        'success': false,
+        'message': 'Request timed out. Please try again.',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Error triggering job matching: $e',
+      };
+    }
   }
 
   static Future<Map<String, dynamic>> saveInternshipWithStoredApplicant({
@@ -750,6 +877,79 @@ class ApiService {
       return {'success': false, 'message': 'Invalid server response'};
     } catch (e) {
       return {'success': false, 'message': 'Network error: $e'};
+    }
+  }
+
+  // Chatbot API methods
+  static Future<Map<String, dynamic>> getCvSuggestions(
+    String applicantId,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('auth_token');
+
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
+
+      final url = '$baseUrl/api/chatbot/suggestions/$applicantId';
+      final response = await http
+          .get(Uri.parse(url), headers: headers)
+          .timeout(const Duration(seconds: 15));
+
+      final data = json.decode(response.body);
+      return data;
+    } on SocketException {
+      return {'success': false, 'error': 'No internet connection'};
+    } on HttpException {
+      return {'success': false, 'error': 'Server error'};
+    } on FormatException {
+      return {'success': false, 'error': 'Invalid server response'};
+    } catch (e) {
+      return {'success': false, 'error': 'Network error: $e'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> sendChatMessage({
+    required String message,
+    String? applicantId,
+    List<Map<String, String>>? conversationHistory,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('auth_token');
+
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
+
+      final requestBody = {
+        'message': message,
+        if (applicantId != null) 'applicant_id': applicantId,
+        if (conversationHistory != null) 'conversation_history': conversationHistory,
+      };
+
+      final url = '$baseUrl/api/chatbot/chat';
+      final response = await http
+          .post(Uri.parse(url), 
+               headers: headers, 
+               body: json.encode(requestBody))
+          .timeout(const Duration(seconds: 15));
+
+      final data = json.decode(response.body);
+      return data;
+    } on SocketException {
+      return {'success': false, 'error': 'No internet connection'};
+    } on HttpException {
+      return {'success': false, 'error': 'Server error'};
+    } on FormatException {
+      return {'success': false, 'error': 'Invalid server response'};
+    } catch (e) {
+      return {'success': false, 'error': 'Network error: $e'};
     }
   }
 

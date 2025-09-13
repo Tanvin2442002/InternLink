@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../services/recruiter_api_service.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class RecruiterCandidatesPage extends StatefulWidget {
   const RecruiterCandidatesPage({super.key});
@@ -10,80 +12,133 @@ class RecruiterCandidatesPage extends StatefulWidget {
 class _RecruiterCandidatesPageState extends State<RecruiterCandidatesPage> {
   String _selectedFilter = 'All';
   String _searchQuery = '';
+  bool _isLoading = true;
+  String? _errorMessage;
+  List<Map<String, dynamic>> _candidates = [];
 
-  final List<Map<String, dynamic>> candidates = [
-    {
-      'name': 'Nabiha Parvez',
-      'university': 'MIT',
-      'major': 'Computer Science',
-      'gpa': '3.8',
-      'position': 'Frontend Developer Intern',
-      'appliedDate': '2024-01-15',
-      'status': 'New',
-      'statusColor': Colors.blue,
-      'skills': ['React', 'JavaScript', 'HTML/CSS', 'TypeScript'],
-      'email': 'john.doe@mit.edu',
-      'phone': '+1 (555) 123-4567',
-      'experience': '2 years',
-      'location': 'Boston, MA',
-    },
-    {
-      'name': 'Yusuf Reza Hasnat',
-      'university': 'Stanford',
-      'major': 'Data Science',
-      'gpa': '3.7',
-      'position': 'Data Science Intern',
-      'appliedDate': '2024-01-14',
-      'status': 'Reviewed',
-      'statusColor': Colors.orange,
-      'skills': ['Python', 'Machine Learning', 'SQL', 'Pandas'],
-      'email': 'sarah.smith@stanford.edu',
-      'phone': '+1 (555) 987-6543',
-      'experience': '1 year',
-      'location': 'Palo Alto, CA',
-    },
-    {
-      'name': 'Zaima Ahmed',
-      'university': 'Carnegie Mellon',
-      'major': 'Design',
-      'gpa': '3.9',
-      'position': 'UX Design Intern',
-      'appliedDate': '2024-01-13',
-      'status': 'Shortlisted',
-      'statusColor': Colors.green,
-      'skills': ['Figma', 'Adobe XD', 'Prototyping', 'User Research'],
-      'email': 'mike.johnson@cmu.edu',
-      'phone': '+1 (555) 456-7890',
-      'experience': '1.5 years',
-      'location': 'Pittsburgh, PA',
-    },
-    {
-      'name': 'Nazifa Zahin',
-      'university': 'UC Berkeley',
-      'major': 'Computer Science',
-      'gpa': '3.9',
-      'position': 'Backend Developer Intern',
-      'appliedDate': '2024-01-12',
-      'status': 'Interview Scheduled',
-      'statusColor': Colors.purple,
-      'skills': ['Node.js', 'MongoDB', 'API Development', 'AWS'],
-      'email': 'emma.wilson@berkeley.edu',
-      'phone': '+1 (555) 321-0987',
-      'experience': '2.5 years',
-      'location': 'Berkeley, CA',
-    },
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadCandidates();
+  }
 
   List<Map<String, dynamic>> get filteredCandidates {
-    return candidates.where((candidate) {
+    return _candidates.where((candidate) {
       final matchesFilter = _selectedFilter == 'All' || 
                            candidate['status'] == _selectedFilter;
       final matchesSearch = _searchQuery.isEmpty ||
-                           (candidate['name'] as String).toLowerCase().contains(_searchQuery.toLowerCase()) ||
-                           (candidate['position'] as String).toLowerCase().contains(_searchQuery.toLowerCase()) ||
-                           (candidate['university'] as String).toLowerCase().contains(_searchQuery.toLowerCase());
+                           (candidate['full_name'] ?? '').toLowerCase().contains(_searchQuery.toLowerCase()) ||
+                           (candidate['job_title'] ?? '').toLowerCase().contains(_searchQuery.toLowerCase()) ||
+                           (candidate['company_name'] ?? '').toLowerCase().contains(_searchQuery.toLowerCase());
       return matchesFilter && matchesSearch;
     }).toList();
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'new':
+      case 'applied':
+        return Colors.blue;
+      case 'reviewed':
+      case 'under review':
+        return Colors.orange;
+      case 'shortlisted':
+        return Colors.green;
+      case 'interview scheduled':
+      case 'interview_scheduled':
+      case 'interviewed':
+        return Colors.purple;
+      case 'selected':
+      case 'accepted':
+        return Colors.teal;
+      case 'rejected':
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  String _formatDate(String? dateString) {
+    if (dateString == null) return 'Unknown';
+    try {
+      final date = DateTime.parse(dateString);
+      final now = DateTime.now();
+      final difference = now.difference(date);
+      
+      if (difference.inDays == 0) {
+        return 'Today';
+      } else if (difference.inDays == 1) {
+        return 'Yesterday';
+      } else if (difference.inDays < 7) {
+        return '${difference.inDays} days ago';
+      } else if (difference.inDays < 30) {
+        return '${(difference.inDays / 7).floor()} weeks ago';
+      } else {
+        return '${date.day}/${date.month}/${date.year}';
+      }
+    } catch (e) {
+      return 'Unknown';
+    }
+  }
+
+  Widget _buildStatusChip(String status, Color color) {
+    final count = _candidates.where((candidate) => 
+      (candidate['status'] ?? 'applied').toLowerCase() == status.toLowerCase()
+    ).length;
+    
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Text(
+        '$count $status',
+        style: TextStyle(
+          fontSize: 12,
+          color: color,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _loadCandidates() async {
+    try {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+
+      final response = await RecruiterApiService.getApplications();
+      print('📊 [CANDIDATES PAGE] Full response: $response');
+      
+      if (response['success'] == true) {
+        final applications = List<Map<String, dynamic>>.from(response['applications'] ?? []);
+        print('📊 [CANDIDATES PAGE] Received ${applications.length} applications');
+        if (applications.isNotEmpty) {
+          print('📊 [CANDIDATES PAGE] First application sample: ${applications[0]}');
+        }
+        
+        setState(() {
+          _candidates = applications;
+          _isLoading = false;
+        });
+      } else {
+        print('💥 [CANDIDATES PAGE] API returned success: false');
+        print('💥 [CANDIDATES PAGE] Error message: ${response['message']}');
+        setState(() {
+          _errorMessage = response['message'] ?? 'Failed to load candidates';
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Error loading candidates: $e';
+        _isLoading = false;
+      });
+    }
   }
 
   @override
@@ -151,6 +206,59 @@ class _RecruiterCandidatesPageState extends State<RecruiterCandidatesPage> {
                   ),
                 ),
                 const SizedBox(height: 16),
+                
+                // Statistics Card
+                if (!_isLoading && _candidates.isNotEmpty) ...[
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Colors.deepPurple[50]!, Colors.blue[50]!],
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.deepPurple[100]!),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.people, color: Colors.deepPurple, size: 24),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${filteredCandidates.length} Candidates',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.deepPurple,
+                                ),
+                              ),
+                              Text(
+                                _searchQuery.isEmpty 
+                                  ? 'Total applications received'
+                                  : 'Matching your search criteria',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.deepPurple[600],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Status distribution
+                        Row(
+                          children: [
+                            _buildStatusChip('applied', Colors.blue),
+                            const SizedBox(width: 8),
+                            _buildStatusChip('shortlisted', Colors.green),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 
                 // Filter Chips
                 SingleChildScrollView(
@@ -235,16 +343,70 @@ class _RecruiterCandidatesPageState extends State<RecruiterCandidatesPage> {
           
           // Candidates List
           Expanded(
-            child: filteredCandidates.isEmpty
-                ? _buildEmptyState()
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: filteredCandidates.length,
-                    itemBuilder: (context, index) {
-                      final candidate = filteredCandidates[index];
-                      return _buildCandidateCard(candidate);
-                    },
-                  ),
+            child: _isLoading
+                ? const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        CircularProgressIndicator(
+                          color: Colors.deepPurple,
+                        ),
+                        SizedBox(height: 16),
+                        Text(
+                          'Loading candidates...',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : _errorMessage != null
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.error_outline,
+                              size: 64,
+                              color: Colors.red[300],
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              _errorMessage!,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                color: Colors.red,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 16),
+                            ElevatedButton(
+                              onPressed: _loadCandidates,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.deepPurple,
+                                foregroundColor: Colors.white,
+                              ),
+                              child: const Text('Retry'),
+                            ),
+                          ],
+                        ),
+                      )
+                    : filteredCandidates.isEmpty
+                        ? _buildEmptyState()
+                        : RefreshIndicator(
+                            onRefresh: _loadCandidates,
+                            color: Colors.deepPurple,
+                            child: ListView.builder(
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              itemCount: filteredCandidates.length,
+                              itemBuilder: (context, index) {
+                                final candidate = filteredCandidates[index];
+                                return _buildCandidateCard(candidate);
+                              },
+                            ),
+                          ),
           ),
         ],
       ),
@@ -284,7 +446,7 @@ class _RecruiterCandidatesPageState extends State<RecruiterCandidatesPage> {
                     radius: 32,
                     backgroundColor: Colors.transparent,
                     child: Text(
-                      (candidate['name'] as String).substring(0, 1),
+                      (candidate['full_name'] ?? 'N/A').substring(0, 1).toUpperCase(),
                       style: const TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
@@ -299,7 +461,7 @@ class _RecruiterCandidatesPageState extends State<RecruiterCandidatesPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        candidate['name'] as String,
+                        candidate['full_name'] ?? 'Unknown Candidate',
                         style: const TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
@@ -313,7 +475,7 @@ class _RecruiterCandidatesPageState extends State<RecruiterCandidatesPage> {
                           const SizedBox(width: 4),
                           Flexible(
                             child: Text(
-                              '${candidate['major']} • ${candidate['university']}',
+                              '${candidate['field_of_study'] ?? 'N/A'} • ${candidate['university_name'] ?? 'N/A'}',
                               style: TextStyle(
                                 fontSize: 14,
                                 color: Colors.grey[600],
@@ -345,7 +507,7 @@ class _RecruiterCandidatesPageState extends State<RecruiterCandidatesPage> {
                                       const SizedBox(width: 4),
                                       Flexible( // ADDED: Flexible to prevent overflow
                                         child: Text(
-                                          'GPA: ${candidate['gpa']}',
+                                          'GPA: ${candidate['cgpa'] ?? candidate['gpa'] ?? 'N/A'}',
                                           style: TextStyle(
                                             fontSize: 12,
                                             color: Colors.amber[700],
@@ -371,7 +533,7 @@ class _RecruiterCandidatesPageState extends State<RecruiterCandidatesPage> {
                                       const SizedBox(width: 4),
                                       Flexible( // ADDED: Flexible to prevent overflow
                                         child: Text(
-                                          '${candidate['experience']} exp',
+                                          '${candidate['experience'] ?? 'N/A'} exp',
                                           style: TextStyle(
                                             fontSize: 12,
                                             color: Colors.blue[700],
@@ -452,16 +614,16 @@ class _RecruiterCandidatesPageState extends State<RecruiterCandidatesPage> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
-                    color: (candidate['statusColor'] as Color).withOpacity(0.1),
+                    color: _getStatusColor(candidate['status'] ?? 'new').withOpacity(0.1),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
-                      color: (candidate['statusColor'] as Color).withOpacity(0.3),
+                      color: _getStatusColor(candidate['status'] ?? 'new').withOpacity(0.3),
                     ),
                   ),
                   child: Text(
-                    candidate['status'] as String,
+                    candidate['status'] ?? 'New',
                     style: TextStyle(
-                      color: candidate['statusColor'] as Color,
+                      color: _getStatusColor(candidate['status'] ?? 'new'),
                       fontWeight: FontWeight.w600,
                       fontSize: 12,
                     ),
@@ -499,13 +661,30 @@ class _RecruiterCandidatesPageState extends State<RecruiterCandidatesPage> {
                           ),
                         ),
                         Text(
-                          candidate['position'] as String,
+                          candidate['job_title'] ?? 'Unknown Position',
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
                             color: Colors.deepPurple,
                           ),
                         ),
+                        if (candidate['company_name'] != null) ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Icon(Icons.business, size: 14, color: Colors.deepPurple[400]),
+                              const SizedBox(width: 4),
+                              Text(
+                                candidate['company_name'],
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.deepPurple[600],
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -515,42 +694,109 @@ class _RecruiterCandidatesPageState extends State<RecruiterCandidatesPage> {
             
             const SizedBox(height: 16),
             
-            // Skills
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            // Contact Information & Actions
+            Row(
               children: [
-                Text(
-                  'Skills:',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey[700],
+                // Contact Info
+                Expanded(
+                  flex: 2,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Contact Information:',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey[700],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Icon(Icons.email_outlined, size: 16, color: Colors.grey[600]),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              candidate['email'] ?? 'No email',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.grey[600],
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (candidate['phone'] != null && candidate['phone'].toString().isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(Icons.phone_outlined, size: 16, color: Colors.grey[600]),
+                            const SizedBox(width: 6),
+                            Text(
+                              candidate['phone'],
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Applied: ${_formatDate(candidate['submitted_at'])}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 6,
-                  children: (candidate['skills'] as List<String>)
-                      .map((skill) => Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [Colors.grey[100]!, Colors.grey[50]!],
-                              ),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: Colors.grey[300]!),
-                            ),
-                            child: Text(
-                              skill,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.grey[700],
-                              ),
-                            ),
-                          ))
-                      .toList(),
+                // Quick Actions
+                Expanded(
+                  flex: 1,
+                  child: Column(
+                    children: [
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: () => _updateCandidateStatus(candidate, 'shortlisted'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green[50],
+                            foregroundColor: Colors.green[700],
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                          ),
+                          icon: Icon(Icons.star, size: 16),
+                          label: Text('Shortlist', style: TextStyle(fontSize: 12)),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: () => _showActionMenu(candidate),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.deepPurple,
+                            side: BorderSide(color: Colors.deepPurple),
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                          ),
+                          icon: Icon(Icons.more_horiz, size: 16),
+                          label: Text('More', style: TextStyle(fontSize: 12)),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -736,7 +982,47 @@ class _RecruiterCandidatesPageState extends State<RecruiterCandidatesPage> {
     );
   }
 
-  void _viewCV(Map<String, dynamic> candidate) {
+  void _viewCV(Map<String, dynamic> candidate) async {
+    final cvUrl = candidate['cv_file_url'];
+    
+    if (cvUrl == null || cvUrl.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No CV available for ${candidate['full_name'] ?? 'this candidate'}'),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+      return;
+    }
+
+    try {
+      final uri = Uri.parse(cvUrl);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(
+          uri,
+          mode: LaunchMode.externalApplication,
+        );
+      } else {
+        // Fallback: Show CV info dialog if URL can't be launched
+        _showCVDialog(candidate);
+      }
+    } catch (e) {
+      // Show error and fallback dialog
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error opening CV: $e'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+      _showCVDialog(candidate);
+    }
+  }
+
+  void _showCVDialog(Map<String, dynamic> candidate) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -745,7 +1031,7 @@ class _RecruiterCandidatesPageState extends State<RecruiterCandidatesPage> {
           children: [
             Icon(Icons.description, color: Colors.deepPurple),
             const SizedBox(width: 8),
-            Expanded(child: Text('${candidate['name']} - CV')),
+            Expanded(child: Text('${candidate['full_name'] ?? 'Candidate'} - CV')),
           ],
         ),
         content: Container(
@@ -756,26 +1042,6 @@ class _RecruiterCandidatesPageState extends State<RecruiterCandidatesPage> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.grey[100],
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.info, color: Colors.blue),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'CV viewer functionality will be implemented here. This would typically show the candidate\'s resume/CV document.',
-                        style: TextStyle(fontSize: 14),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
                   color: Colors.deepPurple[50],
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -783,21 +1049,60 @@ class _RecruiterCandidatesPageState extends State<RecruiterCandidatesPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Quick Overview:',
+                      'Candidate Information:',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: Colors.deepPurple,
+                        fontSize: 16,
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    Text('📧 ${candidate['email']}'),
-                    Text('📱 ${candidate['phone']}'),
-                    Text('🎓 ${candidate['university']}'),
-                    Text('📍 ${candidate['location']}'),
-                    Text('⏱️ ${candidate['experience']} experience'),
+                    const SizedBox(height: 12),
+                    _buildInfoRow(Icons.person, 'Name', candidate['full_name'] ?? 'N/A'),
+                    _buildInfoRow(Icons.email, 'Email', candidate['email'] ?? 'N/A'),
+                    _buildInfoRow(Icons.phone, 'Phone', candidate['phone'] ?? 'N/A'),
+                    _buildInfoRow(Icons.work, 'Position', candidate['job_title'] ?? 'N/A'),
+                    _buildInfoRow(Icons.business, 'Company', candidate['company_name'] ?? 'N/A'),
+                    _buildInfoRow(Icons.access_time, 'Applied', _formatDate(candidate['submitted_at'])),
+                    _buildInfoRow(Icons.flag, 'Status', candidate['status'] ?? 'applied'),
                   ],
                 ),
               ),
+              if (candidate['cv_file_url'] != null) ...[
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.blue[50],
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.description, color: Colors.blue),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'CV File Available',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.blue[800],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'CV URL: ${candidate['cv_file_url']}',
+                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 2,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -806,21 +1111,49 @@ class _RecruiterCandidatesPageState extends State<RecruiterCandidatesPage> {
             onPressed: () => Navigator.pop(context),
             child: const Text('Close'),
           ),
-          ElevatedButton.icon(
-            onPressed: () {
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Downloading ${candidate['name']}\'s CV...'),
-                  backgroundColor: Colors.green,
-                ),
-              );
-            },
-            icon: const Icon(Icons.download),
-            label: const Text('Download'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.deepPurple,
-              foregroundColor: Colors.white,
+          if (candidate['cv_file_url'] != null)
+            ElevatedButton.icon(
+              onPressed: () async {
+                try {
+                  final uri = Uri.parse(candidate['cv_file_url']);
+                  await launchUrl(uri, mode: LaunchMode.externalApplication);
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error opening CV: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              },
+              icon: const Icon(Icons.open_in_new),
+              label: const Text('Open CV'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.deepPurple,
+                foregroundColor: Colors.white,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 16, color: Colors.deepPurple),
+          const SizedBox(width: 8),
+          Text(
+            '$label: ',
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(color: Colors.grey[700]),
             ),
           ),
         ],
@@ -942,7 +1275,7 @@ class _RecruiterCandidatesPageState extends State<RecruiterCandidatesPage> {
             ),
             const SizedBox(height: 20),
             Text(
-              'Actions for ${candidate['name']}',
+              'Actions for ${candidate['full_name'] ?? 'Candidate'}',
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 20),
@@ -959,7 +1292,7 @@ class _RecruiterCandidatesPageState extends State<RecruiterCandidatesPage> {
               subtitle: const Text('Move to shortlisted candidates'),
               onTap: () {
                 Navigator.pop(context);
-                _updateCandidateStatus(candidate, 'Shortlisted', Colors.green);
+                _updateCandidateStatus(candidate, 'shortlisted');
               },
             ),
             ListTile(
@@ -975,7 +1308,7 @@ class _RecruiterCandidatesPageState extends State<RecruiterCandidatesPage> {
               subtitle: const Text('Set up an interview with candidate'),
               onTap: () {
                 Navigator.pop(context);
-                _updateCandidateStatus(candidate, 'Interview Scheduled', Colors.purple);
+                _updateCandidateStatus(candidate, 'interview_scheduled');
               },
             ),
             ListTile(
@@ -991,7 +1324,7 @@ class _RecruiterCandidatesPageState extends State<RecruiterCandidatesPage> {
               subtitle: const Text('Decline this application'),
               onTap: () {
                 Navigator.pop(context);
-                _updateCandidateStatus(candidate, 'Rejected', Colors.red);
+                _updateCandidateStatus(candidate, 'rejected');
               },
             ),
           ],
@@ -1000,19 +1333,58 @@ class _RecruiterCandidatesPageState extends State<RecruiterCandidatesPage> {
     );
   }
 
-  void _updateCandidateStatus(Map<String, dynamic> candidate, String newStatus, Color newColor) {
-    setState(() {
-      candidate['status'] = newStatus;
-      candidate['statusColor'] = newColor;
-    });
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${candidate['name']} status updated to $newStatus'),
-        backgroundColor: Colors.green,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
-    );
+  void _updateCandidateStatus(Map<String, dynamic> candidate, String newStatus) async {
+    try {
+      final applicationId = candidate['id'];  // Application ID is in 'id' field
+      if (applicationId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: Application ID not found'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+        return;
+      }
+
+      final response = await RecruiterApiService.updateApplicationStatus(
+        applicationId: applicationId,
+        status: newStatus,
+      );
+
+      if (response['success'] == true) {
+        setState(() {
+          candidate['status'] = newStatus;
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${candidate['full_name'] ?? 'Candidate'} status updated to $newStatus'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update status: ${response['message'] ?? 'Unknown error'}'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error updating status: $e'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    }
   }
 }

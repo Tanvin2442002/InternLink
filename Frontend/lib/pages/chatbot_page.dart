@@ -1,273 +1,635 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../services/api_service.dart';
+import 'dart:convert';
+import 'dart:async';
 
 class ChatbotPage extends StatefulWidget {
   const ChatbotPage({super.key});
+
   @override
   State<ChatbotPage> createState() => _ChatbotPageState();
 }
 
 class _ChatbotPageState extends State<ChatbotPage> {
-  final List<_ChatMessage> _messages = [
-    _ChatMessage('assistant', 'Hi! I\'m your InternLink assistant. Ask me about internships, applications, or interview prep.'),
-  ];
-  final TextEditingController _input = TextEditingController();
-  bool _thinking = false;
+  final TextEditingController _messageController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+  
+  List<ChatMessage> _messages = [];
+  bool _isTyping = false;
+  String? _applicantId;
+  String? _userName;
+  bool _hasCV = false;
 
   @override
-  void dispose() {
-    _input.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    _initializeChat();
   }
 
-  Future<void> _send() async {
-    final text = _input.text.trim();
-    if (text.isEmpty || _thinking) return;
+  Future<void> _initializeChat() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      // Get user data
+      final userData = prefs.getString('user_data');
+      final profileData = prefs.getString('profile_data');
+      
+      if (userData != null) {
+        final user = jsonDecode(userData);
+        _applicantId = user['applicant_id']?.toString();
+      }
+      
+      if (profileData != null) {
+        final profile = jsonDecode(profileData);
+        _userName = profile['full_name'] ?? 'Student';
+        _hasCV = profile['cv_url'] != null && profile['cv_url'].toString().isNotEmpty;
+      }
+
+      // Add welcome message
+      setState(() {
+        _messages.add(ChatMessage(
+          content: "Hi ${_userName ?? 'there'}! 👋 I'm your InternLink career assistant. I can help you with:\n\n• CV improvement & analysis\n• Interview preparation\n• Application strategies\n• Career guidance\n\nWhat would you like to work on today?",
+          isUser: false,
+          timestamp: DateTime.now(),
+        ));
+      });
+    } catch (e) {
+      print('Error initializing chat: $e');
+    }
+  }
+
+  Future<void> _sendMessage(String message) async {
+    if (message.trim().isEmpty) return;
+
+    // Add user message
     setState(() {
-      _messages.add(_ChatMessage('user', text));
-      _input.clear();
-      _thinking = true;
+      _messages.add(ChatMessage(
+        content: message,
+        isUser: true,
+        timestamp: DateTime.now(),
+      ));
+      _isTyping = true;
     });
-    await Future.delayed(const Duration(milliseconds: 600));
-    final reply = _generateMockReply(text);
+
+    _messageController.clear();
+    _scrollToBottom();
+
+    try {
+      // Prepare conversation history (last 10 messages)
+      final conversationHistory = _messages
+          .where((msg) => msg.content != "Hi ${_userName ?? 'there'}! 👋 I'm your InternLink career assistant...")
+          .map((msg) => {
+            'role': msg.isUser ? 'user' : 'assistant',
+            'content': msg.content,
+          }).toList();
+
+      // Send to backend
+      final result = await ApiService.sendChatMessage(
+        message: message,
+        applicantId: _applicantId,
+        conversationHistory: conversationHistory.cast<Map<String, String>>(),
+      );
+
+      if (result['success'] == true) {
+        setState(() {
+          _messages.add(ChatMessage(
+            content: result['response'] ?? 'I apologize, but I couldn\'t generate a response.',
+            isUser: false,
+            timestamp: DateTime.now(),
+          ));
+        });
+      } else {
+        setState(() {
+          _messages.add(ChatMessage(
+            content: 'Sorry, I\'m having trouble connecting right now. Please try again in a moment.',
+            isUser: false,
+            timestamp: DateTime.now(),
+          ));
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _messages.add(ChatMessage(
+          content: 'I\'m experiencing technical difficulties. Please try again.',
+          isUser: false,
+          timestamp: DateTime.now(),
+        ));
+      });
+    } finally {
+      setState(() {
+        _isTyping = false;
+      });
+      _scrollToBottom();
+    }
+  }
+
+  Future<void> _getCVSuggestions() async {
+    if (_applicantId == null) {
+      _showSnackBar('Please log in to get CV suggestions');
+      return;
+    }
+
+    if (!_hasCV) {
+      _showSnackBar('Please upload your CV first in the Profile section');
+      return;
+    }
+
     setState(() {
-      _messages.add(_ChatMessage('assistant', reply));
-      _thinking = false;
+      _messages.add(ChatMessage(
+        content: "Analyze my CV and give me improvement suggestions",
+        isUser: true,
+        timestamp: DateTime.now(),
+      ));
+      _isTyping = true;
+    });
+
+    _scrollToBottom();
+
+    try {
+      final result = await ApiService.getCvSuggestions(_applicantId!);
+
+      if (result['success'] == true) {
+        final suggestions = result['suggestions'];
+        final hasCV = result['hasCV'] ?? false;
+        
+        if (!hasCV) {
+          setState(() {
+            _messages.add(ChatMessage(
+              content: 'I notice you haven\'t uploaded a CV yet. Please upload your CV in the Profile section first, then I can provide detailed analysis and suggestions!',
+              isUser: false,
+              timestamp: DateTime.now(),
+            ));
+          });
+        } else {
+          // Format the AI suggestions into a readable response
+          String response = _formatCVSuggestions(suggestions);
+          setState(() {
+            _messages.add(ChatMessage(
+              content: response,
+              isUser: false,
+              timestamp: DateTime.now(),
+            ));
+          });
+        }
+      } else {
+        setState(() {
+          _messages.add(ChatMessage(
+            content: 'I couldn\'t analyze your CV right now. Please try again or ask me any specific questions about CV improvement.',
+            isUser: false,
+            timestamp: DateTime.now(),
+          ));
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _messages.add(ChatMessage(
+          content: 'I\'m having trouble accessing your CV. Please try again or ask me general CV questions.',
+          isUser: false,
+          timestamp: DateTime.now(),
+        ));
+      });
+    } finally {
+      setState(() {
+        _isTyping = false;
+      });
+      _scrollToBottom();
+    }
+  }
+
+  String _formatCVSuggestions(Map<String, dynamic> suggestions) {
+    final buffer = StringBuffer();
+    
+    buffer.writeln('📊 **CV Analysis Complete!**\n');
+    
+    // Overall score
+    if (suggestions['overall_score'] != null) {
+      buffer.writeln('**Overall Score:** ${suggestions['overall_score']}/10\n');
+    }
+    
+    // Strengths
+    if (suggestions['strengths'] != null && suggestions['strengths'].isNotEmpty) {
+      buffer.writeln('✅ **Current Strengths:**');
+      for (String strength in suggestions['strengths']) {
+        buffer.writeln('• $strength');
+      }
+      buffer.writeln('');
+    }
+    
+    // Priority improvements
+    if (suggestions['priority_improvements'] != null && suggestions['priority_improvements'].isNotEmpty) {
+      buffer.writeln('🎯 **Priority Improvements:**');
+      for (var improvement in suggestions['priority_improvements']) {
+        buffer.writeln('**${improvement['category']}**');
+        buffer.writeln('• Issue: ${improvement['issue']}');
+        buffer.writeln('• Suggestion: ${improvement['suggestion']}');
+        buffer.writeln('• Impact: ${improvement['impact']}\n');
+      }
+    }
+    
+    // Quick wins
+    if (suggestions['quick_wins'] != null && suggestions['quick_wins'].isNotEmpty) {
+      buffer.writeln('⚡ **Quick Wins (Easy fixes):**');
+      for (String win in suggestions['quick_wins']) {
+        buffer.writeln('• $win');
+      }
+      buffer.writeln('');
+    }
+    
+    // Advanced tips
+    if (suggestions['advanced_tips'] != null && suggestions['advanced_tips'].isNotEmpty) {
+      buffer.writeln('🚀 **Advanced Tips:**');
+      for (String tip in suggestions['advanced_tips']) {
+        buffer.writeln('• $tip');
+      }
+      buffer.writeln('');
+    }
+    
+    // Sector specific
+    if (suggestions['sector_specific'] != null && suggestions['sector_specific'].toString().isNotEmpty) {
+      buffer.writeln('🎓 **For Your Field:**');
+      buffer.writeln(suggestions['sector_specific']);
+      buffer.writeln('');
+    }
+    
+    buffer.writeln('Feel free to ask me about any specific area you\'d like to improve! 💪');
+    
+    return buffer.toString();
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
     });
   }
 
-  String _generateMockReply(String prompt) {
-    final lower = prompt.toLowerCase();
-    if (lower.contains('resume')) {
-      return 'For a strong resume: quantify impact (e.g. "Reduced load time 35%"), highlight relevant tech (Flutter, Dart, REST), and keep it to 1 page for an intern role.';
-    }
-    if (lower.contains('interview')) {
-      return 'Interview prep: practice explaining projects, review data structures (lists, maps), and prep 2-3 STAR stories for behavioral questions.';
-    }
-    if (lower.contains('apply')) {
-      return 'Apply strategy: batch 5 applications/day, tailor the first bullet to the role keywords, and follow up politely after 7-10 days.';
-    }
-    if (lower.contains('cover')) {
-      return 'Cover letter tip: 3 short paragraphs – hook + alignment, core impact story, and a confident close with a call to connect.';
-    }
-    return 'Noted! I can help with internships, resume tips, interview prep, and application strategy. Ask me something like "How do I improve my resume?"';
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F6FA),
       appBar: AppBar(
-        title: const Text('Assistant Chat'),
+        title: const Text('Career Assistant'),
         backgroundColor: Colors.deepPurple,
+        foregroundColor: Colors.white,
         elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.lightbulb_outline),
-            onPressed: () => _showPrompts(),
-            tooltip: 'Starter Prompts',
-          )
-        ],
       ),
       body: Column(
         children: [
+          // Quick action buttons
+          Container(
+            padding: const EdgeInsets.all(16),
+            color: Colors.grey[50],
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _QuickActionButton(
+                    icon: Icons.description,
+                    label: 'CV Analysis',
+                    onTap: _getCVSuggestions,
+                    enabled: _hasCV,
+                  ),
+                  const SizedBox(width: 8),
+                  _QuickActionButton(
+                    icon: Icons.work,
+                    label: 'Interview Tips',
+                    onTap: () => _sendMessage('Give me interview tips'),
+                  ),
+                  const SizedBox(width: 8),
+                  _QuickActionButton(
+                    icon: Icons.send,
+                    label: 'Application Help',
+                    onTap: () => _sendMessage('How do I write a good application?'),
+                  ),
+                  const SizedBox(width: 8),
+                  _QuickActionButton(
+                    icon: Icons.school,
+                    label: 'Career Advice',
+                    onTap: () => _sendMessage('What career advice do you have for me?'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          
+          // Chat messages
           Expanded(
             child: ListView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-              reverse: false,
-              itemCount: _messages.length + (_thinking ? 1 : 0),
+              controller: _scrollController,
+              padding: const EdgeInsets.all(16),
+              itemCount: _messages.length + (_isTyping ? 1 : 0),
               itemBuilder: (context, index) {
-                if (_thinking && index == _messages.length) {
-                  return const _TypingBubble();
+                if (index == _messages.length && _isTyping) {
+                  return _TypingIndicator();
                 }
-                final m = _messages[index];
-                return Align(
-                  alignment: m.role == 'user' ? Alignment.centerRight : Alignment.centerLeft,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(vertical: 6),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: m.role == 'user' ? Colors.deepPurple : Colors.white,
-                        borderRadius: BorderRadius.only(
-                          topLeft: const Radius.circular(18),
-                          topRight: const Radius.circular(18),
-                          bottomLeft: Radius.circular(m.role == 'user' ? 18 : 4),
-                          bottomRight: Radius.circular(m.role == 'user' ? 4 : 18),
-                        ),
-                        boxShadow: m.role == 'user'
-                            ? null
-                            : [BoxShadow(color: Colors.black.withOpacity(.05), blurRadius: 12, offset: const Offset(0, 6))],
-                      ),
-                      child: SelectableText(
-                        m.text,
-                        style: TextStyle(
-                          color: m.role == 'user' ? Colors.white : Colors.black87,
-                          fontSize: 14,
-                          height: 1.35,
-                        ),
-                      ),
-                    ),
-                  ),
+                
+                final message = _messages[index];
+                return _ChatBubble(
+                  message: message,
+                  isUser: message.isUser,
                 );
               },
             ),
           ),
-          _composer(),
+          
+          // Message input
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 4,
+                  offset: const Offset(0, -2),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _messageController,
+                    decoration: InputDecoration(
+                      hintText: 'Ask me about CV, interviews, applications...',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: BorderSide(color: Colors.grey[300]!),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                    ),
+                    onSubmitted: _sendMessage,
+                    textInputAction: TextInputAction.send,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.deepPurple,
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: IconButton(
+                    icon: const Icon(Icons.send, color: Colors.white),
+                    onPressed: () => _sendMessage(_messageController.text),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _composer() {
-    return SafeArea(
-      top: false,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(.08), blurRadius: 16, offset: const Offset(0, -2))],
-        ),
-        child: Row(
-          children: [
-            IconButton(
-              icon: const Icon(Icons.auto_awesome, color: Colors.deepPurple),
-              onPressed: () => _insertSuggestion(),
-              tooltip: 'Insert suggestion',
-            ),
-            Expanded(
-              child: TextField(
-                controller: _input,
-                minLines: 1,
-                maxLines: 5,
-                decoration: const InputDecoration.collapsed(hintText: 'Ask something...'),
-                onSubmitted: (_) => _send(),
+  @override
+  void dispose() {
+    _messageController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+}
+
+class ChatMessage {
+  final String content;
+  final bool isUser;
+  final DateTime timestamp;
+
+  ChatMessage({
+    required this.content,
+    required this.isUser,
+    required this.timestamp,
+  });
+}
+
+class _ChatBubble extends StatelessWidget {
+  final ChatMessage message;
+  final bool isUser;
+
+  const _ChatBubble({
+    required this.message,
+    required this.isUser,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        children: [
+          if (!isUser) ...[
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: Colors.deepPurple,
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: const Icon(
+                Icons.smart_toy,
+                color: Colors.white,
+                size: 20,
               ),
             ),
             const SizedBox(width: 8),
-            ElevatedButton(
-              onPressed: _send,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.deepPurple,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+          ],
+          Flexible(
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isUser ? Colors.deepPurple : Colors.grey[200],
+                borderRadius: BorderRadius.circular(16),
               ),
-              child: const Icon(Icons.send, size: 18, color: Colors.white),
+              child: Text(
+                message.content,
+                style: TextStyle(
+                  color: isUser ? Colors.white : Colors.black87,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          ),
+          if (isUser) ...[
+            const SizedBox(width: 8),
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: Colors.grey[400],
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: const Icon(
+                Icons.person,
+                color: Colors.white,
+                size: 20,
+              ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  void _insertSuggestion() {
-    const suggestions = [
-      'How do I improve my resume?',
-      'Give me 3 behavioral interview tips',
-      'What skills should I learn for a Flutter internship?',
-      'How many applications should I send weekly?',
-    ];
-    final next = suggestions[(DateTime.now().millisecondsSinceEpoch ~/ 1000) % suggestions.length];
-    setState(() => _input.text = next);
-  }
-
-  void _showPrompts() {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(26))),
-      builder: (_) => Padding(
-        padding: const EdgeInsets.fromLTRB(22, 20, 22, 28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(children:[
-              const Icon(Icons.lightbulb, color: Colors.deepPurple),
-              const SizedBox(width: 10),
-              const Text('Starter Prompts', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-              const Spacer(),
-              IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close))
-            ]),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                'How to structure my resume summary?',
-                'Best way to follow up after applying',
-                'Difference between CV and resume',
-                'Mock interview suggestions',
-                'How to show project impact',
-              ].map((p) => ActionChip(
-                label: Text(p),
-                onPressed: () {
-                  Navigator.pop(context);
-                  setState(() => _input.text = p);
-                },
-              )).toList(),
-            )
-          ],
-        ),
+        ],
       ),
     );
   }
 }
 
-class _ChatMessage {
-  final String role; // 'user' or 'assistant'
-  final String text;
-  _ChatMessage(this.role, this.text);
-}
-
-class _TypingBubble extends StatefulWidget {
-  const _TypingBubble();
+class _TypingIndicator extends StatelessWidget {
   @override
-  State<_TypingBubble> createState() => _TypingBubbleState();
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: Colors.deepPurple,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: const Icon(
+              Icons.smart_toy,
+              color: Colors.white,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.grey[200],
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _TypingDot(delay: 0),
+                const SizedBox(width: 4),
+                _TypingDot(delay: 200),
+                const SizedBox(width: 4),
+                _TypingDot(delay: 400),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-class _TypingBubbleState extends State<_TypingBubble> with SingleTickerProviderStateMixin {
-  late final AnimationController _c;
+class _TypingDot extends StatefulWidget {
+  final int delay;
+
+  const _TypingDot({required this.delay});
+
+  @override
+  State<_TypingDot> createState() => _TypingDotState();
+}
+
+class _TypingDotState extends State<_TypingDot>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
   @override
   void initState() {
     super.initState();
-    _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..repeat();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 600),
+      vsync: this,
+    );
+    _animation = Tween<double>(begin: 0.5, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+
+    Future.delayed(Duration(milliseconds: widget.delay), () {
+      if (mounted) {
+        _controller.repeat(reverse: true);
+      }
+    });
   }
-  @override
-  void dispose() { _c.dispose(); super.dispose(); }
+
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        margin: const EdgeInsets.symmetric(vertical: 6),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(18),
-            topRight: Radius.circular(18),
-            bottomRight: Radius.circular(18),
-            bottomLeft: Radius.circular(4),
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, child) {
+        return Container(
+          width: 6,
+          height: 6,
+          decoration: BoxDecoration(
+            color: Colors.grey[600]!.withOpacity(_animation.value),
+            borderRadius: BorderRadius.circular(3),
           ),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(.05), blurRadius: 12, offset: const Offset(0, 6))],
+        );
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+}
+
+class _QuickActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool enabled;
+
+  const _QuickActionButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.enabled = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: enabled ? Colors.deepPurple.withOpacity(0.1) : Colors.grey[300],
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: enabled ? Colors.deepPurple.withOpacity(0.3) : Colors.grey[400]!,
+          ),
         ),
-        child: AnimatedBuilder(
-          animation: _c,
-          builder: (_, __) {
-            final v = _c.value;
-            return Row(mainAxisSize: MainAxisSize.min, children: List.generate(3, (i) {
-              final opacity = ((v + i * 0.2) % 1).clamp(0, 1).toDouble();
-              return Container(
-                width: 6,
-                height: 6,
-                margin: const EdgeInsets.symmetric(horizontal: 3),
-                decoration: BoxDecoration(
-                  color: Colors.deepPurple.withOpacity(opacity),
-                  shape: BoxShape.circle,
-                ),
-              );
-            }));
-          },
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 16,
+              color: enabled ? Colors.deepPurple : Colors.grey[600],
+            ),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                color: enabled ? Colors.deepPurple : Colors.grey[600],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
         ),
       ),
     );

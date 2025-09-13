@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/recruiter_api_service.dart';
 
 class RecruiterProfilePage extends StatefulWidget {
   const RecruiterProfilePage({super.key});
@@ -9,16 +10,68 @@ class RecruiterProfilePage extends StatefulWidget {
 
 class _RecruiterProfilePageState extends State<RecruiterProfilePage> {
   bool _isEditing = false;
+  bool _isLoading = true;
+  bool _isSaving = false;
   
-  final _companyNameController = TextEditingController(text: 'TechVision Labs');
-  final _industryController = TextEditingController(text: 'Software Development');
-  final _websiteController = TextEditingController(text: 'www.techvisionlabs.com');
-  final _descriptionController = TextEditingController(
-    text: 'TechVision Labs is a leading software development company specializing in AI-powered solutions and innovative web applications. We are committed to fostering talent and providing meaningful internship opportunities for students.'
-  );
-  final _locationController = TextEditingController(text: 'San Francisco, CA');
-  final _foundedController = TextEditingController(text: '2018');
-  final _sizeController = TextEditingController(text: '50-100 employees');
+  final _companyNameController = TextEditingController();
+  final _industryController = TextEditingController();
+  final _websiteController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  final _locationController = TextEditingController();
+  final _foundedController = TextEditingController();
+  final _sizeController = TextEditingController();
+  final _fullNameController = TextEditingController();
+  final _positionController = TextEditingController();
+  final _emailController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  // Load profile data from API
+  Future<void> _loadProfile() async {
+    try {
+      setState(() => _isLoading = true);
+      
+      print('🔄 [PROFILE] Loading recruiter profile...');
+      
+      final profile = await RecruiterApiService.getProfile();
+      
+      setState(() {
+        _fullNameController.text = profile['full_name'] ?? '';
+        _companyNameController.text = profile['company_name'] ?? '';
+        _positionController.text = profile['position_title'] ?? '';
+        _websiteController.text = profile['company_website'] ?? '';
+        _emailController.text = profile['work_email'] ?? '';
+        
+        // Set some default values for fields not in API
+        _industryController.text = 'Technology';
+        _descriptionController.text = 'We are committed to fostering talent and providing meaningful internship opportunities for students.';
+        _locationController.text = 'Remote';
+        _foundedController.text = '2020';
+        _sizeController.text = '50-100 employees';
+        
+        _isLoading = false;
+      });
+      
+      print('✅ [PROFILE] Profile loaded successfully');
+    } catch (e) {
+      print('💥 [PROFILE] Error loading profile: $e');
+      setState(() => _isLoading = false);
+      
+      // Show error message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load profile: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -32,7 +85,7 @@ class _RecruiterProfilePageState extends State<RecruiterProfilePage> {
         actions: [
           IconButton(
             icon: Icon(_isEditing ? Icons.close : Icons.edit),
-            onPressed: () {
+            onPressed: _isLoading ? null : () {
               setState(() {
                 _isEditing = !_isEditing;
               });
@@ -40,7 +93,11 @@ class _RecruiterProfilePageState extends State<RecruiterProfilePage> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
+      body: _isLoading 
+        ? const Center(
+            child: CircularProgressIndicator(color: Colors.deepPurple),
+          )
+        : SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
@@ -332,13 +389,22 @@ class _RecruiterProfilePageState extends State<RecruiterProfilePage> {
                   const SizedBox(width: 16),
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: _saveProfile,
+                      onPressed: _isSaving ? null : _saveProfile,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.deepPurple,
                         foregroundColor: Colors.white,
                         minimumSize: const Size.fromHeight(50),
                       ),
-                      child: const Text('Save Changes'),
+                      child: _isSaving 
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : const Text('Save Changes'),
                     ),
                   ),
                 ],
@@ -445,17 +511,50 @@ class _RecruiterProfilePageState extends State<RecruiterProfilePage> {
     );
   }
 
-  void _saveProfile() {
-    setState(() {
-      _isEditing = false;
-    });
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Profile updated successfully!'),
-        backgroundColor: Colors.green,
-      ),
-    );
+  Future<void> _saveProfile() async {
+    try {
+      setState(() => _isSaving = true);
+      
+      print('🔄 [PROFILE] Saving recruiter profile...');
+      
+      await RecruiterApiService.updateProfile(
+        fullName: _fullNameController.text,
+        companyName: _companyNameController.text,
+        positionTitle: _positionController.text.isNotEmpty ? _positionController.text : null,
+        companyWebsite: _websiteController.text.isNotEmpty ? _websiteController.text : null,
+        workEmail: _emailController.text.isNotEmpty ? _emailController.text : null,
+      );
+      
+      setState(() {
+        _isEditing = false;
+        _isSaving = false;
+      });
+      
+      print('✅ [PROFILE] Profile saved successfully');
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Profile updated successfully!'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      print('💥 [PROFILE] Error saving profile: $e');
+      setState(() => _isSaving = false);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update profile: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -467,6 +566,9 @@ class _RecruiterProfilePageState extends State<RecruiterProfilePage> {
     _locationController.dispose();
     _foundedController.dispose();
     _sizeController.dispose();
+    _fullNameController.dispose();
+    _positionController.dispose();
+    _emailController.dispose();
     super.dispose();
   }
 }
