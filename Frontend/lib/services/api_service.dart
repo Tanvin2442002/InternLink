@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://192.168.68.109:5000'; // For Android emulator
+  static const String baseUrl = 'http://10.103.132.224:5000'; // For Android emulator
 
   static Future<bool> testConnection() async {
     try {

@@ -438,6 +438,7 @@ class _DashboardPageState extends State<DashboardPage> {
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Row(children: [
                     Container(
@@ -457,10 +458,24 @@ class _DashboardPageState extends State<DashboardPage> {
                       icon: const Icon(Icons.bookmark_add_outlined, color: Colors.deepPurple),
                     )
                   ]),
-                  const Spacer(),
-                  Text(r['title'], style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-                  const SizedBox(height: 4),
-                  Text(r['company_name'], style: TextStyle(fontSize: 11, color: Colors.grey[700])),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        r['title'], 
+                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        r['company_name'], 
+                        style: TextStyle(fontSize: 11, color: Colors.grey[700]),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),

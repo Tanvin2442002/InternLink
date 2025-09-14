@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class RecruiterApiService {
-  static const String baseUrl = 'http://192.168.68.109:5000'; // Match existing API service
+  static const String baseUrl = 'http://10.103.132.224:5000'; // Match existing API service
 
   // Helper method to get headers with authentication
   static Future<Map<String, String>> _getHeaders() async {
